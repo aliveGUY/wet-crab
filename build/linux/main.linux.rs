@@ -95,9 +95,17 @@ impl ApplicationHandler for App {
                         &self.program,
                     )
                 {
-                    program.render().expect("Failed to render triangle");
+                    if let Some(window) = &self.window {
+                        let size = window.inner_size();
+                        program.render(size.width, size.height).expect("Failed to render triangle");
+                    }
 
                     surface.swap_buffers(context).unwrap();
+                }
+            }
+            WindowEvent::Resized(_) => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             _ => (),

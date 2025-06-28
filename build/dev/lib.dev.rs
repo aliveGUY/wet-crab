@@ -33,7 +33,7 @@ fn render() -> Result<(), JsValue> {
     let program = Program::new(gl)
         .map_err(|e| JsValue::from_str(&e))?;
     
-    program.render()
+    program.render(canvas.width(), canvas.height())
         .map_err(|e| JsValue::from_str(&e))?;
     
     log("🔺 Triangle rendered successfully!");
