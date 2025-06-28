@@ -9,6 +9,31 @@ fn mat2x2_rot(angle_radians: f32) -> [f32; 4] {
     [cos, -sin, sin, cos]
 }
 
+// === MATRIX MATH ===
+
+fn create_orthographic_projection(aspect_ratio: f32) -> [f32; 16] {
+    // Create an orthographic projection that maintains aspect ratio
+    // We'll use a coordinate system from -1 to 1, but adjust for aspect ratio
+    let (left, right, bottom, top) = if aspect_ratio >= 1.0 {
+        // Wide screen: expand horizontal range
+        (-aspect_ratio, aspect_ratio, -1.0, 1.0)
+    } else {
+        // Tall screen: expand vertical range
+        (-1.0, 1.0, -1.0 / aspect_ratio, 1.0 / aspect_ratio)
+    };
+    
+    let near = -1.0;
+    let far = 1.0;
+    
+    // Orthographic projection matrix (column-major order for OpenGL)
+    [
+        2.0 / (right - left), 0.0, 0.0, 0.0,
+        0.0, 2.0 / (top - bottom), 0.0, 0.0,
+        0.0, 0.0, -2.0 / (far - near), 0.0,
+        -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1.0,
+    ]
+}
+
 const VERTICES: [f32; 15] = [
     // vPos      vCol
     -0.5,
@@ -160,6 +185,17 @@ impl Program {
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             self.gl.use_program(Some(self.shader_program));
+            
+            // Calculate aspect ratio and create projection matrix
+            let aspect_ratio = width as f32 / height as f32;
+            let projection_matrix = create_orthographic_projection(aspect_ratio);
+            
+            // Set projection matrix uniform
+            if let Some(location) = self.gl.get_uniform_location(self.shader_program, "projection") {
+                self.gl.uniform_matrix_4_f32_slice(Some(&location), false, &projection_matrix);
+            } else {
+                return Err("Failed to get uniform location for 'projection'".to_string());
+            }
             
             // Update rotation based on delta time for smooth animation
             let rotation_speed = 1.0; // radians per second
