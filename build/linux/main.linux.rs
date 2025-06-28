@@ -7,6 +7,7 @@ use glutin_winit::DisplayBuilder;
 use glow::HasContext;
 use raw_window_handle::HasWindowHandle;
 use std::num::NonZeroU32;
+use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ ActiveEventLoop, EventLoop };
@@ -20,6 +21,8 @@ struct App {
     gl_context: Option<glutin::context::PossiblyCurrentContext>,
     gl_surface: Option<glutin::surface::Surface<WindowSurface>>,
     program: Option<Program>,
+    start_time: Option<Instant>,
+    last_frame_time: Option<Instant>,
 }
 
 impl ApplicationHandler for App {
@@ -68,6 +71,11 @@ impl ApplicationHandler for App {
 
             let program = Program::new(gl).expect("Failed to create graphics program");
 
+            // Initialize timing
+            let now = Instant::now();
+            self.start_time = Some(now);
+            self.last_frame_time = Some(now);
+
             window.request_redraw();
 
             self.window = Some(window);
@@ -96,11 +104,29 @@ impl ApplicationHandler for App {
                     )
                 {
                     if let Some(window) = &self.window {
+                        let current_time = Instant::now();
+                        
+                        // Calculate elapsed time since start
+                        let elapsed_time = if let Some(start_time) = self.start_time {
+                            current_time.duration_since(start_time).as_secs_f32()
+                        } else {
+                            0.0
+                        };
+                        
+                        // Update last frame time
+                        self.last_frame_time = Some(current_time);
+                        
                         let size = window.inner_size();
-                        program.render(size.width, size.height).expect("Failed to render triangle");
+                        program.render(size.width, size.height, elapsed_time)
+                            .expect("Failed to render triangle");
                     }
 
                     surface.swap_buffers(context).unwrap();
+                    
+                    // Request continuous rendering
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
+                    }
                 }
             }
             WindowEvent::Resized(_) => {
@@ -129,6 +155,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         gl_context: None,
         gl_surface: None,
         program: None,
+        start_time: None,
+        last_frame_time: None,
     };
 
     event_loop.run_app(&mut app)?;

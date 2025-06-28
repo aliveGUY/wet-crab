@@ -153,13 +153,23 @@ impl Program {
         }
     }
 
-    pub fn render(&self, width: u32, height: u32) -> Result<(), String> {
+    pub fn render(&self, width: u32, height: u32, delta_time: f32) -> Result<(), String> {
         unsafe {
             self.gl.viewport(0, 0, width as i32, height as i32);
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             self.gl.use_program(Some(self.shader_program));
+            
+            // Update rotation based on delta time for smooth animation
+            let rotation_speed = 1.0; // radians per second
+            let angle = delta_time * rotation_speed;
+            let rot_matrix = mat2x2_rot(angle);
+            
+            if let Some(location) = self.gl.get_uniform_location(self.shader_program, "rot") {
+                self.gl.uniform_matrix_2_f32_slice(Some(&location), true, &rot_matrix);
+            }
+
             self.gl.bind_vertex_array(Some(self.vao));
             self.gl.draw_arrays(glow::TRIANGLES, 0, 3);
             self.gl.bind_vertex_array(None);
