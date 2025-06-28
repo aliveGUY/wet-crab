@@ -1,25 +1,13 @@
-#version 300 es
+#VERSION
 
-uniform float u_aspect_ratio;
+layout(location = 0) in vec2 vPos;
+layout(location = 1) in vec3 vCol;
 
-// Centered triangle vertices
-const vec2 positions[3] = vec2[3](
-    vec2( 0.0,  0.3),  // Top vertex (centered)
-    vec2(-0.3, -0.3),  // Bottom left vertex
-    vec2( 0.3, -0.3)   // Bottom right vertex
-);
+uniform mat2 rot;
+
+out vec3 color;
 
 void main() {
-    vec2 pos = positions[gl_VertexID];
-    
-    // Apply aspect ratio correction to maintain square proportions
-    if (u_aspect_ratio > 1.0) {
-        // Window is wider than tall - compress horizontally
-        pos.x /= u_aspect_ratio;
-    } else {
-        // Window is taller than wide - compress vertically
-        pos.y *= u_aspect_ratio;
-    }
-    
-    gl_Position = vec4(pos, 0.0, 1.0);
+    gl_Position = vec4(rot * vPos, 0.0, 1.0);
+    color = vCol;
 }

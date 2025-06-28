@@ -1,29 +1,154 @@
 use glow::HasContext;
 
+// === VERTEX DATA ===
+
+fn mat2x2_rot(angle_radians: f32) -> [f32; 4] {
+    let cos = angle_radians.cos();
+    let sin = angle_radians.sin();
+
+    [cos, -sin, sin, cos]
+}
+
+const VERTICES: [f32; 15] = [
+    // vPos      vCol
+    -0.5,
+    -0.5,
+    1.0,
+    0.0,
+    0.0, // red
+    0.5,
+    -0.5,
+    0.0,
+    1.0,
+    0.0, // green
+    0.0,
+    0.5,
+    0.0,
+    0.0,
+    1.0, // blue
+];
+
+// === HELPERS ===
+
+fn compile_shader(
+    gl: &glow::Context,
+    shader_type: u32,
+    mut source: String
+) -> Result<glow::Shader, String> {
+    unsafe {
+        let is_web = cfg!(target_arch = "wasm32");
+
+        if is_web {
+            source = source.replace("#VERSION", "#version 300 es\nprecision mediump float;");
+        } else {
+            source = source.replace("#VERSION", "#version 330 core");
+        }
+
+        let shader = gl.create_shader(shader_type)?;
+        gl.shader_source(shader, &source);
+        gl.compile_shader(shader);
+        if !gl.get_shader_compile_status(shader) {
+            let log = gl.get_shader_info_log(shader);
+            gl.delete_shader(shader);
+            return Err(format!("Shader compile error: {}", log));
+        }
+        Ok(shader)
+    }
+}
+
+fn setup_buffers(gl: &glow::Context) -> Result<(glow::VertexArray, glow::Buffer), String> {
+    unsafe {
+        let vao = gl.create_vertex_array()?;
+        let vbo = gl.create_buffer()?;
+
+        gl.bind_vertex_array(Some(vao));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+
+        gl.buffer_data_u8_slice(
+            glow::ARRAY_BUFFER,
+            bytemuck::cast_slice(&VERTICES),
+            glow::STATIC_DRAW
+        );
+
+        let stride = 5 * (std::mem::size_of::<f32>() as i32);
+
+        // vPos (attribute 0): vec2, offset 0
+        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+        gl.enable_vertex_attrib_array(0);
+
+        // vCol (attribute 1): vec3, offset = 2 floats
+        gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, stride, 2 * 4);
+        gl.enable_vertex_attrib_array(1);
+
+        gl.bind_buffer(glow::ARRAY_BUFFER, None);
+        gl.bind_vertex_array(None);
+
+        Ok((vao, vbo))
+    }
+}
+
 pub struct Program {
     gl: glow::Context,
     shader_program: glow::Program,
     vao: glow::VertexArray,
-    aspect_ratio_location: Option<glow::UniformLocation>,
+    vbo: glow::Buffer,
 }
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
         unsafe {
-            let vertex_shader = compile_vertex_shader(&gl)?;
-            let fragment_shader = compile_fragment_shader(&gl)?;
+            // Compile shaders
+            let vertex_shader_source = include_str!("assets/vertex.glsl");
+            let fragment_shader_source = include_str!("assets/fragment.glsl");
+            let vertex_shader = compile_shader(
+                &gl,
+                glow::VERTEX_SHADER,
+                vertex_shader_source.to_string()
+            )?;
+            let fragment_shader = compile_shader(
+                &gl,
+                glow::FRAGMENT_SHADER,
+                fragment_shader_source.to_string()
+            )?;
 
-            let shader_program = link_shader_program(&gl, vertex_shader, fragment_shader)?;
+            // Create and link program
+            let program = gl.create_program()?;
+            gl.attach_shader(program, vertex_shader);
+            gl.attach_shader(program, fragment_shader);
+            gl.bind_attrib_location(program, 0, "vPos");
+            gl.bind_attrib_location(program, 1, "vCol");
+            gl.link_program(program);
 
-            let aspect_ratio_location = gl.get_uniform_location(shader_program, "u_aspect_ratio");
+            // Check for link errors
+            if !gl.get_program_link_status(program) {
+                let log = gl.get_program_info_log(program);
+                gl.delete_program(program);
+                return Err(format!("Program link error: {}", log));
+            }
 
-            let vao = setup_vertex_attributes(&gl)?;
+            // Clean up shaders
+            gl.delete_shader(vertex_shader);
+            gl.delete_shader(fragment_shader);
+
+            // Use the program before setting uniforms
+            gl.use_program(Some(program));
+
+            // Set the rotation matrix uniform
+            let rot_matrix = mat2x2_rot(3.14 / 2.0);
+            if let Some(location) = gl.get_uniform_location(program, "rot") {
+                gl.uniform_matrix_2_f32_slice(Some(&location), true, &rot_matrix);
+            } else {
+                return Err("Failed to get uniform location for 'rot'".to_string());
+            }
+
+            // Setup VAO and VBO
+            let (vao, vbo) = setup_buffers(&gl)?;
 
             Ok(Program {
                 gl,
-                shader_program,
+                shader_program: program,
                 vao,
-                aspect_ratio_location,
+                vbo,
             })
         }
     }
@@ -31,22 +156,12 @@ impl Program {
     pub fn render(&self, width: u32, height: u32) -> Result<(), String> {
         unsafe {
             self.gl.viewport(0, 0, width as i32, height as i32);
-
-            let aspect_ratio = (width as f32) / (height as f32);
-
-            self.gl.clear_color(0.1, 0.2, 0.3, 1.0);
+            self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             self.gl.use_program(Some(self.shader_program));
-
-            if let Some(ref location) = self.aspect_ratio_location {
-                self.gl.uniform_1_f32(Some(location), aspect_ratio);
-            }
-
             self.gl.bind_vertex_array(Some(self.vao));
-
             self.gl.draw_arrays(glow::TRIANGLES, 0, 3);
-
             self.gl.bind_vertex_array(None);
             self.gl.use_program(None);
         }
@@ -58,87 +173,7 @@ impl Program {
         unsafe {
             self.gl.delete_program(self.shader_program);
             self.gl.delete_vertex_array(self.vao);
+            self.gl.delete_buffer(self.vbo);
         }
-    }
-}
-
-fn create_triangle_vertices() -> [f32; 6] {
-    [
-        0.0,
-        0.5, // Top vertex
-        -0.5,
-        -0.5, // Bottom left vertex
-        0.5,
-        -0.5, // Bottom right vertex
-    ]
-}
-
-fn compile_vertex_shader(gl: &glow::Context) -> Result<glow::Shader, String> {
-    let vertex_shader_source = include_str!("assets/vertex.glsl");
-    compile_shader(gl, glow::VERTEX_SHADER, vertex_shader_source)
-}
-
-fn compile_fragment_shader(gl: &glow::Context) -> Result<glow::Shader, String> {
-    let fragment_shader_source = include_str!("assets/fragment.glsl");
-    compile_shader(gl, glow::FRAGMENT_SHADER, fragment_shader_source)
-}
-
-fn compile_shader(
-    gl: &glow::Context,
-    shader_type: u32,
-    source: &str
-) -> Result<glow::Shader, String> {
-    unsafe {
-        let shader = gl
-            .create_shader(shader_type)
-            .map_err(|e| format!("Failed to create shader: {}", e))?;
-
-        gl.shader_source(shader, source);
-        gl.compile_shader(shader);
-
-        if !gl.get_shader_compile_status(shader) {
-            let error = gl.get_shader_info_log(shader);
-            gl.delete_shader(shader);
-            return Err(format!("Shader compilation failed: {}", error));
-        }
-
-        Ok(shader)
-    }
-}
-
-fn link_shader_program(
-    gl: &glow::Context,
-    vertex_shader: glow::Shader,
-    fragment_shader: glow::Shader
-) -> Result<glow::Program, String> {
-    unsafe {
-        let program = gl.create_program().map_err(|e| format!("Failed to create program: {}", e))?;
-
-        gl.attach_shader(program, vertex_shader);
-        gl.attach_shader(program, fragment_shader);
-        gl.link_program(program);
-
-        gl.delete_shader(vertex_shader);
-        gl.delete_shader(fragment_shader);
-
-        if !gl.get_program_link_status(program) {
-            let error = gl.get_program_info_log(program);
-            gl.delete_program(program);
-            return Err(format!("Program linking failed: {}", error));
-        }
-
-        Ok(program)
-    }
-}
-
-fn setup_vertex_attributes(gl: &glow::Context) -> Result<glow::VertexArray, String> {
-    unsafe {
-        let vao = gl.create_vertex_array().map_err(|e| format!("Failed to create VAO: {}", e))?;
-
-        gl.bind_vertex_array(Some(vao));
-
-        gl.bind_vertex_array(None);
-
-        Ok(vao)
     }
 }

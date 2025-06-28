@@ -8,17 +8,18 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
+bytemuck = "1.23.1"
 wasm-bindgen-futures = "0.4"
 glow = "0.16.0"
 web-sys = { version = "0.3", features = [
-    "Window", 
-    "Document", 
-    "Element", 
-    "HtmlElement", 
-    "HtmlCanvasElement", 
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlCanvasElement",
     "console",
     "WebGlRenderingContext",
-    "WebGl2RenderingContext"
+    "WebGl2RenderingContext",
 ] }
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
