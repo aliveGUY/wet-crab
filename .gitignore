@@ -1,3 +1,9 @@
 /target
+
 *lock*
+
 /pkg
+
+src/main.rs
+src/lib.rs
+Cargo.toml
