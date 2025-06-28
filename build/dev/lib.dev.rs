@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
-use glow::{HasContext, Context, Shader, Program};
+use web_sys::{ HtmlCanvasElement, WebGl2RenderingContext };
+use glow::{ HasContext, Context, Shader, Program };
 
 #[wasm_bindgen(start)]
 pub fn run() {
@@ -27,8 +27,8 @@ fn render() -> Result<(), JsValue> {
     unsafe {
         gl.viewport(0, 0, canvas.width() as i32, canvas.height() as i32);
 
-        let vs = compile_shader(&gl, glow::VERTEX_SHADER, include_str!("vertex.glsl"))?;
-        let fs = compile_shader(&gl, glow::FRAGMENT_SHADER, include_str!("fragment.glsl"))?;
+        let vs = compile_shader(&gl, glow::VERTEX_SHADER, include_str!("assets/vertex.glsl"))?;
+        let fs = compile_shader(&gl, glow::FRAGMENT_SHADER, include_str!("assets/fragment.glsl"))?;
         let program = link_program(&gl, vs, fs)?;
 
         let vao = gl.create_vertex_array()?;
