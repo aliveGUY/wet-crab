@@ -1,8 +1,16 @@
-import init, { calculate_tax } from "./pkg/runst_poc.js";
+import init from "./pkg/runst_poc.js";
 
-async function run() {
+async function main() {
+  const canvas = document.getElementById("webgl-canvas");
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+
+  if (window.reRender) window.reRender();
+
   await init();
-  console.log(calculate_tax(9000));
 }
 
-run();
+main();
