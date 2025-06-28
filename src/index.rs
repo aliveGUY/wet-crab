@@ -35,22 +35,23 @@ fn create_orthographic_projection(aspect_ratio: f32) -> [f32; 16] {
 }
 
 const VERTICES: [f32; 15] = [
+    // Equilateral triangle centered at origin
     // vPos      vCol
-    -0.5,
-    -0.5,
+    0.0,
+    0.6,
     1.0,
     0.0,
-    0.0, // red
-    0.5,
-    -0.5,
+    0.0, // red - top vertex
+    -0.5196,
+    -0.3,
     0.0,
     1.0,
-    0.0, // green
+    0.0, // green - bottom left vertex
+    0.5196,
+    -0.3,
     0.0,
-    0.5,
     0.0,
-    0.0,
-    1.0, // blue
+    1.0, // blue - bottom right vertex
 ];
 
 // === HELPERS ===
