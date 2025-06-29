@@ -1,79 +1,92 @@
 use glow::HasContext;
 
+pub fn parse_mesh() -> Result<Vec<[f32; 3]>, Box<dyn std::error::Error>> {
+    // Embed GLTF and binary data at compile time - works on all platforms
+    let gltf_data = include_bytes!("assets/meshes/cube.gltf");
+    let buffer_data = include_bytes!("assets/meshes/cube.bin");
+    
+    // Parse GLTF from embedded data
+    let gltf = gltf::Gltf::from_slice(gltf_data)?;
+    let document = gltf.document;
+    
+    // Get first mesh and first primitive
+    let mesh = document.meshes().next().ok_or("No mesh found")?;
+    let primitive = mesh.primitives().next().ok_or("No primitive in mesh")?;
+    
+    // Create a buffer collection from embedded data
+    let buffers = vec![gltf::buffer::Data(buffer_data.to_vec())];
+    
+    // Use reader to access buffer data
+    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+    
+    // Collect positions
+    let positions: Vec<[f32; 3]> = reader
+        .read_positions()
+        .ok_or("No position attribute")?
+        .collect();
+
+    Ok(positions)
+}
+
 // === VERTEX DATA ===
 
-type mat3x3 = [f32; 9];
+type mat4x4 = [f32; 16];
 
-fn mat3x3_rot(angle_radians: f32) -> mat3x3 {
+fn mat4x4_rot_z(angle_radians: f32) -> mat4x4 {
     let cos = angle_radians.cos();
     let sin = angle_radians.sin();
 
-    [cos, -sin, 0.0, sin, cos, 0.0, 0.0, 0.0, 1.0]
+    [cos, -sin, 0.0, 0.0, sin, cos, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 }
 
-fn mat3x3_translate(x: f32, y: f32) -> mat3x3 {
-    [1.0, 0.0, x, 0.0, 1.0, y, 0.0, 0.0, 1.0]
+fn mat4x4_rot_x(angle_radians: f32) -> mat4x4 {
+    let cos = angle_radians.cos();
+    let sin = angle_radians.sin();
+
+    [1.0, 0.0, 0.0, 0.0, 0.0, cos, -sin, 0.0, 0.0, sin, cos, 0.0, 0.0, 0.0, 0.0, 1.0]
 }
 
-fn mat3x3_mul(a: mat3x3, b: mat3x3) -> mat3x3 {
-    let mut result = [0.0; 9];
-    for i in 0..9 {
-        let row = i / 3;
-        let col = i % 3;
-        for k in 0..3 {
-            result[i] += a[row * 3 + k] * b[k * 3 + col];
+fn mat4x4_translate(x: f32, y: f32, z: f32) -> mat4x4 {
+    [1.0, 0.0, 0.0, x, 0.0, 1.0, 0.0, y, 0.0, 0.0, 1.0, z, 0.0, 0.0, 0.0, 1.0]
+}
+
+fn mat4x4_mul(a: mat4x4, b: mat4x4) -> mat4x4 {
+    let mut result = [0.0; 16];
+    for i in 0..16 {
+        let row = i / 4;
+        let col = i % 4;
+        for k in 0..4 {
+            result[i] += a[row * 4 + k] * b[k * 4 + col];
         }
     }
     result
 }
 
-// === MATRIX MATH ===
+fn mat4x4_perspective(near: f32, far: f32) -> mat4x4 {
+    let a = -far / (far - near);
+    let b = (-far * near) / (far - near);
 
-fn create_orthographic_projection(aspect_ratio: f32) -> [f32; 16] {
-    let (left, right, bottom, top) = if aspect_ratio >= 1.0 {
-        (-aspect_ratio, aspect_ratio, -1.0, 1.0)
-    } else {
-        (-1.0, 1.0, -1.0 / aspect_ratio, 1.0 / aspect_ratio)
-    };
-
-    let near = -1.0;
-    let far = 1.0;
-
-    [
-        2.0 / (right - left),
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        2.0 / (top - bottom),
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -2.0 / (far - near),
-        0.0,
-        -(right + left) / (right - left),
-        -(top + bottom) / (top - bottom),
-        -(far + near) / (far - near),
-        1.0,
-    ]
+    [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, a, b, 0.0, 0.0, -1.0, 0.0]
 }
 
-const VERTICES: [f32; 15] = [
-    // Equilateral triangle centered at origin
-    // vPos      vCol
+const VERTICES: [f32; 18] = [
+    // Centered equilateral triangle
+    // vPos             vCol
     0.0,
-    0.6,
+    0.577,
+    0.0,
     1.0,
     0.0,
     0.0, // red - top vertex
-    -0.5196,
-    -0.3,
+    -0.5,
+    -0.289,
+    0.0,
     0.0,
     1.0,
     0.0, // green - bottom left vertex
-    0.5196,
-    -0.3,
+    0.5,
+    -0.289,
+    0.0,
     0.0,
     0.0,
     1.0, // blue - bottom right vertex
@@ -121,14 +134,14 @@ fn setup_buffers(gl: &glow::Context) -> Result<(glow::VertexArray, glow::Buffer)
             glow::STATIC_DRAW
         );
 
-        let stride = 5 * (std::mem::size_of::<f32>() as i32);
+        let stride = 6 * (std::mem::size_of::<f32>() as i32);
 
-        // vPos (attribute 0): vec2, offset 0
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+        // vPos (attribute 0): vec3, offset 0
+        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
         gl.enable_vertex_attrib_array(0);
 
-        // vCol (attribute 1): vec3, offset = 2 floats
-        gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, stride, 2 * 4);
+        // vCol (attribute 1): vec3, offset = 3 floats
+        gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, stride, 3 * 4);
         gl.enable_vertex_attrib_array(1);
 
         gl.bind_buffer(glow::ARRAY_BUFFER, None);
@@ -147,10 +160,15 @@ pub struct Program {
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
+        let positions: Vec<[f32; 3]> = parse_mesh().map_err(|e| format!("Failed to parse mesh: {}", e))?;
+
+        for (i, pos) in positions.iter().enumerate() {
+            println!("Vertex {}: [{}, {}, {}]", i, pos[0], pos[1], pos[2]);
+        }
         unsafe {
             // Compile shaders
-            let vertex_shader_source = include_str!("assets/vertex.glsl");
-            let fragment_shader_source = include_str!("assets/fragment.glsl");
+            let vertex_shader_source = include_str!("assets/shaders/vertex.glsl");
+            let fragment_shader_source = include_str!("assets/shaders/fragment.glsl");
             let vertex_shader = compile_shader(
                 &gl,
                 glow::VERTEX_SHADER,
@@ -204,24 +222,15 @@ impl Program {
 
             self.gl.use_program(Some(self.shader_program));
 
-            // Calculate aspect ratio and create projection matrix
-            let aspect_ratio = (width as f32) / (height as f32);
-            let projection_matrix = create_orthographic_projection(aspect_ratio);
+            let angle = delta_time.rem_euclid(std::f32::consts::TAU);
 
-            // Set projection matrix uniform
-            if let Some(location) = self.gl.get_uniform_location(self.shader_program, "projection") {
-                self.gl.uniform_matrix_4_f32_slice(Some(&location), false, &projection_matrix);
-            } else {
-                return Err("Failed to get uniform location for 'projection'".to_string());
-            }
-
-            // Update rotation based on delta time for smooth animation
-            let rotation_speed = 1.0; // radians per second
-            let angle = delta_time * rotation_speed;
-            let rot_matrix = mat3x3_rot(angle);
+            let mut transform = mat4x4_translate(0.0, 0.8, 0.0);
+            transform = mat4x4_mul(transform, mat4x4_rot_x(angle));
+            transform = mat4x4_mul(mat4x4_translate(0.0, 0.0, -5.0), transform);
+            transform = mat4x4_mul(mat4x4_perspective(0.1, 10.0), transform);
 
             if let Some(location) = self.gl.get_uniform_location(self.shader_program, "transform") {
-                self.gl.uniform_matrix_3_f32_slice(Some(&location), true, &rot_matrix);
+                self.gl.uniform_matrix_4_f32_slice(Some(&location), true, &transform);
             }
 
             self.gl.bind_vertex_array(Some(self.vao));
