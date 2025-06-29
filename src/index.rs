@@ -1,31 +1,32 @@
 use glow::HasContext;
 
-pub fn parse_mesh() -> Result<Vec<[f32; 3]>, Box<dyn std::error::Error>> {
-    // Embed GLTF and binary data at compile time - works on all platforms
+pub fn parse_mesh() -> Result<
+    (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u32>),
+    Box<dyn std::error::Error>
+> {
     let gltf_data = include_bytes!("assets/meshes/cube.gltf");
     let buffer_data = include_bytes!("assets/meshes/cube.bin");
-    
-    // Parse GLTF from embedded data
+
     let gltf = gltf::Gltf::from_slice(gltf_data)?;
     let document = gltf.document;
-    
-    // Get first mesh and first primitive
+
     let mesh = document.meshes().next().ok_or("No mesh found")?;
     let primitive = mesh.primitives().next().ok_or("No primitive in mesh")?;
-    
-    // Create a buffer collection from embedded data
+
     let buffers = vec![gltf::buffer::Data(buffer_data.to_vec())];
-    
-    // Use reader to access buffer data
+
     let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-    
-    // Collect positions
+
     let positions: Vec<[f32; 3]> = reader
         .read_positions()
         .ok_or("No position attribute")?
         .collect();
 
-    Ok(positions)
+    let normals: Vec<[f32; 3]> = reader.read_normals().ok_or("No normal attribute")?.collect();
+
+    let indices: Vec<u32> = reader.read_indices().ok_or("No indices found")?.into_u32().collect();
+
+    Ok((positions, normals, indices))
 }
 
 // === VERTEX DATA ===
@@ -120,34 +121,49 @@ fn compile_shader(
     }
 }
 
-fn setup_buffers(gl: &glow::Context) -> Result<(glow::VertexArray, glow::Buffer), String> {
+fn setup_buffers(
+    gl: &glow::Context,
+    vertices: &[f32],
+    indices: &[u32]
+) -> Result<(glow::VertexArray, glow::Buffer, glow::Buffer), String> {
     unsafe {
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
+        let ebo = gl.create_buffer()?;
 
         gl.bind_vertex_array(Some(vao));
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
 
+        // Upload vertex data (interleaved positions and normals)
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(&VERTICES),
+            bytemuck::cast_slice(vertices),
             glow::STATIC_DRAW
         );
 
+        // Upload index data
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+        gl.buffer_data_u8_slice(
+            glow::ELEMENT_ARRAY_BUFFER,
+            bytemuck::cast_slice(indices),
+            glow::STATIC_DRAW
+        );
+
+        // Stride is now 6 floats (3 position + 3 normal)
         let stride = 6 * (std::mem::size_of::<f32>() as i32);
 
         // vPos (attribute 0): vec3, offset 0
         gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
         gl.enable_vertex_attrib_array(0);
 
-        // vCol (attribute 1): vec3, offset = 3 floats
+        // vNormal (attribute 1): vec3, offset 3 floats = 12 bytes
         gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, stride, 3 * 4);
         gl.enable_vertex_attrib_array(1);
 
         gl.bind_buffer(glow::ARRAY_BUFFER, None);
         gl.bind_vertex_array(None);
 
-        Ok((vao, vbo))
+        Ok((vao, vbo, ebo))
     }
 }
 
@@ -156,15 +172,22 @@ pub struct Program {
     shader_program: glow::Program,
     vao: glow::VertexArray,
     vbo: glow::Buffer,
+    ebo: glow::Buffer,
+    index_count: i32,
 }
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
-        let positions: Vec<[f32; 3]> = parse_mesh().map_err(|e| format!("Failed to parse mesh: {}", e))?;
+        let (positions, normals, indices) = parse_mesh().map_err(|e|
+            format!("Failed to parse mesh: {}", e)
+        )?;
 
-        for (i, pos) in positions.iter().enumerate() {
-            println!("Vertex {}: [{}, {}, {}]", i, pos[0], pos[1], pos[2]);
-        }
+        // Interleave positions and normals
+        let vertices: Vec<f32> = positions
+            .iter()
+            .zip(normals.iter())
+            .flat_map(|(pos, norm)| [pos[0], pos[1], pos[2], norm[0], norm[1], norm[2]])
+            .collect();
         unsafe {
             // Compile shaders
             let vertex_shader_source = include_str!("assets/shaders/vertex.glsl");
@@ -185,7 +208,7 @@ impl Program {
             gl.attach_shader(program, vertex_shader);
             gl.attach_shader(program, fragment_shader);
             gl.bind_attrib_location(program, 0, "vPos");
-            gl.bind_attrib_location(program, 1, "vCol");
+            gl.bind_attrib_location(program, 1, "vNormal");
             gl.link_program(program);
 
             // Check for link errors
@@ -201,15 +224,18 @@ impl Program {
 
             // Use the program before setting uniforms
             gl.use_program(Some(program));
+            gl.enable(glow::DEPTH_TEST);
 
-            // Setup VAO and VBO
-            let (vao, vbo) = setup_buffers(&gl)?;
+            // Setup VAO, VBO, and EBO
+            let (vao, vbo, ebo) = setup_buffers(&gl, &vertices, &indices)?;
 
             Ok(Program {
                 gl,
                 shader_program: program,
                 vao,
                 vbo,
+                ebo,
+                index_count: indices.len() as i32,
             })
         }
     }
@@ -218,23 +244,37 @@ impl Program {
         unsafe {
             self.gl.viewport(0, 0, width as i32, height as i32);
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
             self.gl.use_program(Some(self.shader_program));
 
             let angle = delta_time.rem_euclid(std::f32::consts::TAU);
 
-            let mut transform = mat4x4_translate(0.0, 0.8, 0.0);
-            transform = mat4x4_mul(transform, mat4x4_rot_x(angle));
-            transform = mat4x4_mul(mat4x4_translate(0.0, 0.0, -5.0), transform);
-            transform = mat4x4_mul(mat4x4_perspective(0.1, 10.0), transform);
+            let mut world_transform = mat4x4_translate(0.0, 0.8, 0.0);
+            world_transform = mat4x4_mul(mat4x4_rot_x(angle), world_transform);
+            world_transform = mat4x4_mul(mat4x4_translate(0.0, 0.0, -5.0), world_transform);
+            let viewport_transform = mat4x4_perspective(0.1, 10.0);
 
-            if let Some(location) = self.gl.get_uniform_location(self.shader_program, "transform") {
-                self.gl.uniform_matrix_4_f32_slice(Some(&location), true, &transform);
+            if
+                let Some(location) = self.gl.get_uniform_location(
+                    self.shader_program,
+                    "world_transform"
+                )
+            {
+                self.gl.uniform_matrix_4_f32_slice(Some(&location), true, &world_transform);
+            }
+
+            if
+                let Some(location) = self.gl.get_uniform_location(
+                    self.shader_program,
+                    "viewport_transform"
+                )
+            {
+                self.gl.uniform_matrix_4_f32_slice(Some(&location), true, &viewport_transform);
             }
 
             self.gl.bind_vertex_array(Some(self.vao));
-            self.gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            self.gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
             self.gl.bind_vertex_array(None);
             self.gl.use_program(None);
         }
@@ -247,6 +287,7 @@ impl Program {
             self.gl.delete_program(self.shader_program);
             self.gl.delete_vertex_array(self.vao);
             self.gl.delete_buffer(self.vbo);
+            self.gl.delete_buffer(self.ebo);
         }
     }
 }
