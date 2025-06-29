@@ -1,0 +1,12 @@
+Прежде чем поднять dev сервер нужно установить symlink pkg в папку build/dev/ 
+# Linux
+```bash
+cd build/dev
+ln -s ../../pkg pkg
+```
+
+# Windows
+```bash
+cd build/dev
+mklink /D pkg ..\..\pkg
+```
