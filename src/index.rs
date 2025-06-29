@@ -2,35 +2,60 @@ use glow::HasContext;
 
 // === VERTEX DATA ===
 
-fn mat2x2_rot(angle_radians: f32) -> [f32; 4] {
+type mat3x3 = [f32; 9];
+
+fn mat3x3_rot(angle_radians: f32) -> mat3x3 {
     let cos = angle_radians.cos();
     let sin = angle_radians.sin();
 
-    [cos, -sin, sin, cos]
+    [cos, -sin, 0.0, sin, cos, 0.0, 0.0, 0.0, 1.0]
+}
+
+fn mat3x3_translate(x: f32, y: f32) -> mat3x3 {
+    [1.0, 0.0, x, 0.0, 1.0, y, 0.0, 0.0, 1.0]
+}
+
+fn mat3x3_mul(a: mat3x3, b: mat3x3) -> mat3x3 {
+    let mut result = [0.0; 9];
+    for i in 0..9 {
+        let row = i / 3;
+        let col = i % 3;
+        for k in 0..3 {
+            result[i] += a[row * 3 + k] * b[k * 3 + col];
+        }
+    }
+    result
 }
 
 // === MATRIX MATH ===
 
 fn create_orthographic_projection(aspect_ratio: f32) -> [f32; 16] {
-    // Create an orthographic projection that maintains aspect ratio
-    // We'll use a coordinate system from -1 to 1, but adjust for aspect ratio
     let (left, right, bottom, top) = if aspect_ratio >= 1.0 {
-        // Wide screen: expand horizontal range
         (-aspect_ratio, aspect_ratio, -1.0, 1.0)
     } else {
-        // Tall screen: expand vertical range
         (-1.0, 1.0, -1.0 / aspect_ratio, 1.0 / aspect_ratio)
     };
-    
+
     let near = -1.0;
     let far = 1.0;
-    
-    // Orthographic projection matrix (column-major order for OpenGL)
+
     [
-        2.0 / (right - left), 0.0, 0.0, 0.0,
-        0.0, 2.0 / (top - bottom), 0.0, 0.0,
-        0.0, 0.0, -2.0 / (far - near), 0.0,
-        -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1.0,
+        2.0 / (right - left),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.0 / (top - bottom),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -2.0 / (far - near),
+        0.0,
+        -(right + left) / (right - left),
+        -(top + bottom) / (top - bottom),
+        -(far + near) / (far - near),
+        1.0,
     ]
 }
 
@@ -159,14 +184,6 @@ impl Program {
             // Use the program before setting uniforms
             gl.use_program(Some(program));
 
-            // Set the rotation matrix uniform
-            let rot_matrix = mat2x2_rot(3.14 / 2.0);
-            if let Some(location) = gl.get_uniform_location(program, "rot") {
-                gl.uniform_matrix_2_f32_slice(Some(&location), true, &rot_matrix);
-            } else {
-                return Err("Failed to get uniform location for 'rot'".to_string());
-            }
-
             // Setup VAO and VBO
             let (vao, vbo) = setup_buffers(&gl)?;
 
@@ -186,25 +203,25 @@ impl Program {
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             self.gl.use_program(Some(self.shader_program));
-            
+
             // Calculate aspect ratio and create projection matrix
-            let aspect_ratio = width as f32 / height as f32;
+            let aspect_ratio = (width as f32) / (height as f32);
             let projection_matrix = create_orthographic_projection(aspect_ratio);
-            
+
             // Set projection matrix uniform
             if let Some(location) = self.gl.get_uniform_location(self.shader_program, "projection") {
                 self.gl.uniform_matrix_4_f32_slice(Some(&location), false, &projection_matrix);
             } else {
                 return Err("Failed to get uniform location for 'projection'".to_string());
             }
-            
+
             // Update rotation based on delta time for smooth animation
             let rotation_speed = 1.0; // radians per second
             let angle = delta_time * rotation_speed;
-            let rot_matrix = mat2x2_rot(angle);
-            
-            if let Some(location) = self.gl.get_uniform_location(self.shader_program, "rot") {
-                self.gl.uniform_matrix_2_f32_slice(Some(&location), true, &rot_matrix);
+            let rot_matrix = mat3x3_rot(angle);
+
+            if let Some(location) = self.gl.get_uniform_location(self.shader_program, "transform") {
+                self.gl.uniform_matrix_3_f32_slice(Some(&location), true, &rot_matrix);
             }
 
             self.gl.bind_vertex_array(Some(self.vao));
