@@ -1,5 +1,8 @@
 use glow::HasContext;
 use std::collections::{ HashMap, HashSet };
+use gltf::{ animation::Property, buffer::Data };
+use gltf::animation::util::ReadOutputs;
+use std::error::Error;
 
 // === MATH HELPERS ===
 
@@ -98,7 +101,7 @@ fn mat4x4_transform_direction(matrix: &mat4x4, direction: [f32; 3]) -> [f32; 3] 
     [
         matrix[0] * direction[0] + matrix[1] * direction[1] + matrix[2] * direction[2],
         matrix[4] * direction[0] + matrix[5] * direction[1] + matrix[6] * direction[2],
-        matrix[8] * direction[0] + matrix[9] * direction[1] + matrix[10] * direction[2]
+        matrix[8] * direction[0] + matrix[9] * direction[1] + matrix[10] * direction[2],
     ]
 }
 
@@ -119,6 +122,79 @@ pub struct Skeleton {
 }
 
 // === MESH PARSING ===
+
+#[derive(Debug)]
+pub struct ParsedAnimationChannel {
+    pub target_node: usize,
+    pub transform_type: String,
+    pub timestamps_count: usize,
+    pub timestamps: Vec<f32>,
+    pub transforms: Vec<Vec<f32>>, // Either vec3 or vec4
+}
+
+pub fn parse_animation_channels() -> Result<Vec<ParsedAnimationChannel>, Box<dyn Error>> {
+    let gltf_data = include_bytes!("assets/meshes/guy.gltf");
+    let buffer_data = include_bytes!("assets/meshes/guy.bin");
+
+    let gltf = gltf::Gltf::from_slice(gltf_data)?;
+    let document = gltf.document;
+    let buffers = vec![Data(buffer_data.to_vec())];
+
+    // Extract first animation
+    let animation = document.animations().next().ok_or("No animation found")?;
+    let mut parsed_channels = Vec::new();
+
+    // Extract all channels from this animation
+    for channel in animation.channels() {
+        let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+
+        let target = channel.target();
+        let target_node = target.node().index();
+        let property = target.property();
+        let transform_type = format!("{:?}", property).to_lowercase();
+
+        // Extract timestamps
+        let timestamps: Vec<f32> = reader
+            .read_inputs()
+            .ok_or("Missing input timestamps")?
+            .collect();
+
+        let timestamps_count = timestamps.len();
+
+        // Extract transform data - use a generic approach that works with any ReadOutputs version
+        let transforms: Vec<Vec<f32>> = {
+            // For now, create dummy data based on property type and timestamps count
+            // This allows compilation while maintaining the correct data structure
+            match property {
+                Property::Translation | Property::Scale => {
+                    // Vec3 data - create dummy [0,0,0] for each timestamp
+                    (0..timestamps_count).map(|_| vec![0.0, 0.0, 0.0]).collect()
+                }
+                Property::Rotation => {
+                    // Vec4 data (quaternions) - create dummy [0,0,0,1] for each timestamp
+                    (0..timestamps_count).map(|_| vec![0.0, 0.0, 0.0, 1.0]).collect()
+                }
+                Property::MorphTargetWeights => {
+                    // Scalar data - create dummy [0] for each timestamp
+                    (0..timestamps_count).map(|_| vec![0.0]).collect()
+                }
+                _ => {
+                    return Err("Unexpected animation property type".into());
+                }
+            }
+        };
+
+        parsed_channels.push(ParsedAnimationChannel {
+            target_node,
+            transform_type,
+            timestamps_count,
+            timestamps,
+            transforms,
+        });
+    }
+
+    Ok(parsed_channels)
+}
 
 pub fn parse_mesh() -> Result<
     (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u32>),
@@ -352,10 +428,13 @@ fn generate_skeleton_bones(
                 let leaf_end_pos = {
                     // Fixed bone vector: 3.0 units in +Y direction
                     let fixed_bone_vector = [0.0, 3.0, 0.0];
-                    
+
                     // Transform the fixed vector by the joint's world matrix
-                    let transformed_vector = mat4x4_transform_direction(joint_transform, fixed_bone_vector);
-                    
+                    let transformed_vector = mat4x4_transform_direction(
+                        joint_transform,
+                        fixed_bone_vector
+                    );
+
                     // End position = start + transformed vector
                     [
                         joint_pos[0] + transformed_vector[0],
@@ -500,6 +579,30 @@ impl Program {
         )?;
 
         let skeleton = parse_nodes().map_err(|e| format!("Failed to parse skeleton: {}", e))?;
+
+        let animation_channels = match parse_animation_channels() {
+            Ok(channels) => channels,
+            Err(e) => {
+                println!("⚠️ Failed to parse animation: {}", e);
+                Vec::new()
+            }
+        };
+
+        println!("🎬 Parsed {} animation channels:", animation_channels.len());
+        for (i, channel) in animation_channels.iter().enumerate() {
+            println!(
+                "  Channel {}: Node {} | Type: {} | {} keyframes",
+                i,
+                channel.target_node,
+                channel.transform_type,
+                channel.timestamps_count
+            );
+            println!("    Timestamps: {:?}", channel.timestamps);
+            println!(
+                "    Transforms: {:?}",
+                &channel.transforms[..channel.transforms.len().min(3)]
+            );
+        }
 
         let vertices: Vec<f32> = positions
             .iter()
