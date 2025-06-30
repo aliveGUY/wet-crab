@@ -1,5 +1,5 @@
 use glow::HasContext;
-use std::collections::HashMap;
+use std::collections::{ HashMap, HashSet };
 
 // === MATH HELPERS ===
 
@@ -33,6 +33,91 @@ fn mat4x4_perspective(near: f32, far: f32) -> mat4x4 {
     [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, a, b, 0.0, 0.0, -1.0, 0.0]
 }
 
+fn mat4x4_from_transform(translation: [f32; 3], rotation: [f32; 4], scale: [f32; 3]) -> mat4x4 {
+    // Convert quaternion to rotation matrix
+    let [x, y, z, w] = rotation;
+    let x2 = x + x;
+    let y2 = y + y;
+    let z2 = z + z;
+    let xx = x * x2;
+    let xy = x * y2;
+    let xz = x * z2;
+    let yy = y * y2;
+    let yz = y * z2;
+    let zz = z * z2;
+    let wx = w * x2;
+    let wy = w * y2;
+    let wz = w * z2;
+
+    // Create transformation matrix with scale, rotation, and translation
+    [
+        scale[0] * (1.0 - (yy + zz)),
+        scale[0] * (xy - wz),
+        scale[0] * (xz + wy),
+        translation[0],
+        scale[1] * (xy + wz),
+        scale[1] * (1.0 - (xx + zz)),
+        scale[1] * (yz - wx),
+        translation[1],
+        scale[2] * (xz - wy),
+        scale[2] * (yz + wx),
+        scale[2] * (1.0 - (xx + yy)),
+        translation[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
+}
+
+fn mat4x4_identity() -> mat4x4 {
+    [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+}
+
+fn mat4x4_extract_translation(matrix: &mat4x4) -> [f32; 3] {
+    [matrix[3], matrix[7], matrix[11]]
+}
+
+fn mat4x4_extract_rotation_direction(matrix: &mat4x4) -> [f32; 3] {
+    // Extract the forward direction (Z-axis) from the rotation matrix
+    // This gives us the direction the bone is pointing
+    [matrix[2], matrix[6], matrix[10]]
+}
+
+fn normalize_vector(v: [f32; 3]) -> [f32; 3] {
+    let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if length > 0.001 {
+        [v[0] / length, v[1] / length, v[2] / length]
+    } else {
+        [0.0, 1.0, 0.0] // Default to up direction
+    }
+}
+
+fn mat4x4_transform_direction(matrix: &mat4x4, direction: [f32; 3]) -> [f32; 3] {
+    // Transform direction vector (w=0) by the rotation part of the matrix
+    [
+        matrix[0] * direction[0] + matrix[1] * direction[1] + matrix[2] * direction[2],
+        matrix[4] * direction[0] + matrix[5] * direction[1] + matrix[6] * direction[2],
+        matrix[8] * direction[0] + matrix[9] * direction[1] + matrix[10] * direction[2]
+    ]
+}
+
+// === SKELETON DATA STRUCTURES ===
+
+#[derive(Debug, Clone)]
+pub struct Bone {
+    pub start_pos: [f32; 3], // World position of bone start
+    pub end_pos: [f32; 3], // World position of bone end
+    pub node_index: usize, // Reference to GLTF node
+    pub parent_index: Option<usize>, // Parent bone index
+}
+
+#[derive(Debug)]
+pub struct Skeleton {
+    pub bones: Vec<Bone>,
+    pub root_bones: Vec<usize>, // Indices of root bones
+}
+
 // === MESH PARSING ===
 
 pub fn parse_mesh() -> Result<
@@ -62,64 +147,247 @@ pub fn parse_mesh() -> Result<
     Ok((positions, normals, indices))
 }
 
-pub fn parse_nodes() -> Result<(), Box<dyn std::error::Error>> {
+pub fn parse_nodes() -> Result<Skeleton, Box<dyn std::error::Error>> {
     let gltf_data = include_bytes!("assets/meshes/guy.gltf");
 
     let gltf = gltf::Gltf::from_slice(gltf_data)?;
     let document = gltf.document;
 
-    // Build parent-child relationships
+    // Get skeleton joints from skin definition
+    let joint_indices = get_skeleton_joints(&document)?;
+
+    println!("🦴 Found skeleton with {} joints: {:?}", joint_indices.len(), joint_indices);
+
+    // Build parent-child relationships for ALL nodes
     let mut parents: HashMap<usize, usize> = HashMap::new();
-    
+
     for scene in document.scenes() {
         for root_node in scene.nodes() {
             build_parent_map(root_node, None, &mut parents);
         }
     }
 
-    for (index, node) in document.nodes().enumerate() {
-        println!("Node {}:", index);
+    // Calculate world transforms for all nodes
+    let world_transforms = calculate_world_transforms(&document, &parents);
 
-        // Default values per GLTF spec
-        let translation = node.transform().decomposed().0;
-        let rotation = node.transform().decomposed().1;
-        let scale = node.transform().decomposed().2;
+    // Generate bones ONLY from skeleton joints
+    let bones = generate_skeleton_bones(&document, &world_transforms, &parents, &joint_indices);
 
+    // Find root bones (bones without parents in the skeleton)
+    let root_bones: Vec<usize> = bones
+        .iter()
+        .enumerate()
+        .filter_map(|(i, bone)| if bone.parent_index.is_none() { Some(i) } else { None })
+        .collect();
+
+    println!("🦴 Generated {} skeleton bones from {} joints", bones.len(), joint_indices.len());
+    for (i, bone) in bones.iter().enumerate() {
+        let node = document.nodes().nth(bone.node_index).unwrap();
+        let node_name = node.name().unwrap_or("unnamed");
         println!(
-            "  🧭 Translation: [{:.3}, {:.3}, {:.3}]",
-            translation[0],
-            translation[1],
-            translation[2]
+            "  Bone {}: {} (Node {}) -> [{:.2}, {:.2}, {:.2}] to [{:.2}, {:.2}, {:.2}]",
+            i,
+            node_name,
+            bone.node_index,
+            bone.start_pos[0],
+            bone.start_pos[1],
+            bone.start_pos[2],
+            bone.end_pos[0],
+            bone.end_pos[1],
+            bone.end_pos[2]
         );
-        println!(
-            "  🔁 Rotation:    [{:.3}, {:.3}, {:.3}, {:.3}]",
-            rotation[0],
-            rotation[1],
-            rotation[2],
-            rotation[3]
-        );
-        println!("  📏 Scale:       [{:.3}, {:.3}, {:.3}]", scale[0], scale[1], scale[2]);
-
-        if let Some(parent_index) = parents.get(&index) {
-            println!("  🔗 Parent: Node {}", parent_index);
-        } else {
-            println!("  🔗 Parent: (root)");
-        }
-
-        println!();
     }
 
-    Ok(())
+    Ok(Skeleton { bones, root_bones })
 }
 
-fn build_parent_map(node: gltf::Node, parent_index: Option<usize>, parents: &mut HashMap<usize, usize>) {
+fn build_parent_map(
+    node: gltf::Node,
+    parent_index: Option<usize>,
+    parents: &mut HashMap<usize, usize>
+) {
     if let Some(parent) = parent_index {
         parents.insert(node.index(), parent);
     }
-    
+
     for child in node.children() {
         build_parent_map(child, Some(node.index()), parents);
     }
+}
+
+fn calculate_world_transforms(
+    document: &gltf::Document,
+    parents: &HashMap<usize, usize>
+) -> HashMap<usize, mat4x4> {
+    let mut world_transforms: HashMap<usize, mat4x4> = HashMap::new();
+
+    // Calculate transforms recursively, starting from root nodes
+    for node in document.nodes() {
+        if !parents.contains_key(&node.index()) {
+            // This is a root node
+            calculate_node_world_transform(node, &mat4x4_identity(), &mut world_transforms);
+        }
+    }
+
+    world_transforms
+}
+
+fn calculate_node_world_transform(
+    node: gltf::Node,
+    parent_world_transform: &mat4x4,
+    world_transforms: &mut HashMap<usize, mat4x4>
+) {
+    // Get local transform
+    let (translation, rotation, scale) = node.transform().decomposed();
+    let local_transform = mat4x4_from_transform(translation, rotation, scale);
+
+    // Calculate world transform
+    let world_transform = mat4x4_mul(*parent_world_transform, local_transform);
+    world_transforms.insert(node.index(), world_transform);
+
+    // Recursively calculate for children
+    for child in node.children() {
+        calculate_node_world_transform(child, &world_transform, world_transforms);
+    }
+}
+
+fn generate_bones_from_nodes(
+    document: &gltf::Document,
+    world_transforms: &HashMap<usize, mat4x4>,
+    parents: &HashMap<usize, usize>
+) -> Vec<Bone> {
+    let mut bones = Vec::new();
+
+    for node in document.nodes() {
+        if let Some(parent_index) = parents.get(&node.index()) {
+            // This node has a parent, so create a bone from parent to this node
+            if
+                let (Some(parent_transform), Some(child_transform)) = (
+                    world_transforms.get(parent_index),
+                    world_transforms.get(&node.index()),
+                )
+            {
+                let start_pos = mat4x4_extract_translation(parent_transform);
+                let end_pos = mat4x4_extract_translation(child_transform);
+
+                bones.push(Bone {
+                    start_pos,
+                    end_pos,
+                    node_index: node.index(),
+                    parent_index: Some(*parent_index),
+                });
+            }
+        }
+    }
+
+    bones
+}
+
+fn get_skeleton_joints(
+    document: &gltf::Document
+) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
+    // Get the first skin (assuming single skeleton)
+    let skin = document.skins().next().ok_or("No skin found in GLTF")?;
+
+    // Extract joint indices from the skin
+    let joint_indices: Vec<usize> = skin
+        .joints()
+        .map(|joint| joint.index())
+        .collect();
+
+    Ok(joint_indices)
+}
+
+fn generate_skeleton_bones(
+    document: &gltf::Document,
+    world_transforms: &HashMap<usize, mat4x4>,
+    parents: &HashMap<usize, usize>,
+    joint_indices: &[usize]
+) -> Vec<Bone> {
+    let mut bones = Vec::new();
+
+    // Create a set for fast lookup of joint indices
+    let joint_set: HashSet<usize> = joint_indices.iter().cloned().collect();
+
+    // Track which joints have children (are parents)
+    let mut joints_with_children: HashSet<usize> = HashSet::new();
+
+    // First pass: create parent-child bones using position-based approach (working method)
+    for &joint_index in joint_indices {
+        // Only create bones between skeleton joints
+        if let Some(parent_index) = parents.get(&joint_index) {
+            // Check if parent is also a skeleton joint
+            if joint_set.contains(parent_index) {
+                if
+                    let (Some(parent_transform), Some(child_transform)) = (
+                        world_transforms.get(parent_index),
+                        world_transforms.get(&joint_index),
+                    )
+                {
+                    let start_pos = mat4x4_extract_translation(parent_transform);
+                    let end_pos = mat4x4_extract_translation(child_transform);
+
+                    bones.push(Bone {
+                        start_pos,
+                        end_pos,
+                        node_index: joint_index,
+                        parent_index: Some(*parent_index),
+                    });
+
+                    // Mark the parent as having children
+                    joints_with_children.insert(*parent_index);
+                }
+            }
+        }
+    }
+
+    // Second pass: create leaf bones for joints without children
+    for &joint_index in joint_indices {
+        // If this joint is not a parent of any other joint, it's a leaf
+        if !joints_with_children.contains(&joint_index) {
+            if let Some(joint_transform) = world_transforms.get(&joint_index) {
+                let joint_pos = mat4x4_extract_translation(joint_transform);
+
+                // Create a leaf bone using fixed vector approach (like reference repository)
+                let leaf_end_pos = {
+                    // Fixed bone vector: 3.0 units in +Y direction
+                    let fixed_bone_vector = [0.0, 3.0, 0.0];
+                    
+                    // Transform the fixed vector by the joint's world matrix
+                    let transformed_vector = mat4x4_transform_direction(joint_transform, fixed_bone_vector);
+                    
+                    // End position = start + transformed vector
+                    [
+                        joint_pos[0] + transformed_vector[0],
+                        joint_pos[1] + transformed_vector[1],
+                        joint_pos[2] + transformed_vector[2],
+                    ]
+                };
+
+                bones.push(Bone {
+                    start_pos: joint_pos,
+                    end_pos: leaf_end_pos,
+                    node_index: joint_index,
+                    parent_index: parents.get(&joint_index).copied(),
+                });
+            }
+        }
+    }
+
+    bones
+}
+
+fn skeleton_to_line_vertices(skeleton: &Skeleton) -> Vec<f32> {
+    let mut vertices = Vec::new();
+
+    for bone in &skeleton.bones {
+        // Add start position
+        vertices.extend_from_slice(&bone.start_pos);
+        // Add end position
+        vertices.extend_from_slice(&bone.end_pos);
+    }
+
+    vertices
 }
 
 // === SHADER COMPILATION ===
@@ -221,6 +489,8 @@ pub struct Program {
     index_count: i32,
     line_vao: glow::VertexArray,
     line_vbo: glow::Buffer,
+    skeleton: Skeleton,
+    bone_count: i32,
 }
 
 impl Program {
@@ -229,7 +499,7 @@ impl Program {
             format!("Failed to parse mesh: {}", e)
         )?;
 
-        parse_nodes();
+        let skeleton = parse_nodes().map_err(|e| format!("Failed to parse skeleton: {}", e))?;
 
         let vertices: Vec<f32> = positions
             .iter()
@@ -237,7 +507,9 @@ impl Program {
             .flat_map(|(p, n)| [p[0], p[1], p[2], n[0], n[1], n[2]])
             .collect();
 
-        let line_vertices: [f32; 6] = [-0.5, 0.0, 0.0, 0.5, 0.0, 0.0];
+        // Generate line vertices from skeleton
+        let line_vertices = skeleton_to_line_vertices(&skeleton);
+        let bone_count = skeleton.bones.len() as i32;
 
         unsafe {
             let vs_src = include_str!("assets/shaders/vertex.glsl");
@@ -274,6 +546,8 @@ impl Program {
                 index_count: indices.len() as i32,
                 line_vao,
                 line_vbo,
+                skeleton,
+                bone_count,
             })
         }
     }
@@ -298,13 +572,16 @@ impl Program {
                 self.gl.uniform_matrix_4_f32_slice(Some(&u), true, &view);
             }
 
+            // Render the skeleton bones
+            if self.bone_count > 0 {
+                self.gl.bind_vertex_array(Some(self.line_vao));
+                self.gl.draw_arrays(glow::LINES, 0, self.bone_count * 2);
+                self.gl.bind_vertex_array(None);
+            }
+
+            // Optionally render the mesh as well
             // self.gl.bind_vertex_array(Some(self.vao));
             // self.gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
-
-            self.gl.bind_vertex_array(Some(self.line_vao));
-            self.gl.draw_arrays(glow::LINES, 0, 2);
-
-            self.gl.bind_vertex_array(None);
         }
         Ok(())
     }
