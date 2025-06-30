@@ -73,10 +73,14 @@ fn request_animation_frame(render_state: Rc<RefCell<RenderState>>) -> Result<(),
         
         state.last_frame_time = current_time;
         
+        // Get canvas dimensions before mutable borrow
+        let canvas_width = state.canvas.width();
+        let canvas_height = state.canvas.height();
+        
         // Render frame
         if let Err(e) = state.program.render(
-            state.canvas.width(), 
-            state.canvas.height(), 
+            canvas_width, 
+            canvas_height, 
             elapsed_time
         ) {
             web_sys::console::error_1(&format!("Render error: {}", e).into());
