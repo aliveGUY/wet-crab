@@ -4,8 +4,8 @@ pub fn parse_mesh() -> Result<
     (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u32>),
     Box<dyn std::error::Error>
 > {
-    let gltf_data = include_bytes!("assets/meshes/cube.gltf");
-    let buffer_data = include_bytes!("assets/meshes/cube.bin");
+    let gltf_data = include_bytes!("assets/meshes/guy.gltf");
+    let buffer_data = include_bytes!("assets/meshes/guy.bin");
 
     let gltf = gltf::Gltf::from_slice(gltf_data)?;
     let document = gltf.document;
@@ -37,14 +37,30 @@ fn mat4x4_rot_z(angle_radians: f32) -> mat4x4 {
     let cos = angle_radians.cos();
     let sin = angle_radians.sin();
 
-    [cos, -sin, 0.0, 0.0, sin, cos, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+    [cos, -sin, 0.0, 0.0, 
+    sin, cos, 0.0, 0.0, 
+    0.0, 0.0, 1.0, 0.0, 
+    0.0, 0.0, 0.0, 1.0]
 }
 
 fn mat4x4_rot_x(angle_radians: f32) -> mat4x4 {
     let cos = angle_radians.cos();
     let sin = angle_radians.sin();
 
-    [1.0, 0.0, 0.0, 0.0, 0.0, cos, -sin, 0.0, 0.0, sin, cos, 0.0, 0.0, 0.0, 0.0, 1.0]
+    [1.0, 0.0, 0.0, 0.0, 
+    0.0, cos, -sin, 0.0, 
+    0.0, sin, cos, 0.0, 
+    0.0, 0.0, 0.0, 1.0]
+}
+
+fn mat4x4_rot_y(angle_radians: f32) -> mat4x4 {
+    let cos = angle_radians.cos();
+    let sin = angle_radians.sin();
+
+    [cos, 0.0, -sin, 0.0, 
+    0.0, 1.0, -0.0, 0.0, 
+    sin, 0.0, cos, 0.0, 
+    0.0, 0.0, 0.0, 1.0]
 }
 
 fn mat4x4_translate(x: f32, y: f32, z: f32) -> mat4x4 {
@@ -251,8 +267,8 @@ impl Program {
             let angle = delta_time.rem_euclid(std::f32::consts::TAU);
 
             let mut world_transform = mat4x4_translate(0.0, 0.8, 0.0);
-            world_transform = mat4x4_mul(mat4x4_rot_x(angle), world_transform);
-            world_transform = mat4x4_mul(mat4x4_translate(0.0, 0.0, -5.0), world_transform);
+            world_transform = mat4x4_mul(mat4x4_rot_y(angle), world_transform);
+            world_transform = mat4x4_mul(mat4x4_translate(0.0, 0.0, -6.0), world_transform);
             let viewport_transform = mat4x4_perspective(0.1, 10.0);
 
             if
