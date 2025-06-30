@@ -122,6 +122,53 @@ pub struct Skeleton {
 
 // === MESH PARSING ===
 
+pub fn parse_joints_and_weights() -> Result<
+    (Vec<[u16; 4]>, Vec<[f32; 4]>),
+    Box<dyn std::error::Error>
+> {
+    let gltf_data = include_bytes!("assets/meshes/guy.gltf");
+    let buffer_data = include_bytes!("assets/meshes/guy.bin");
+
+    let gltf = gltf::Gltf::from_slice(gltf_data)?;
+    let document = gltf.document;
+    let mesh = document.meshes().next().ok_or("No mesh found")?;
+    let primitive = mesh.primitives().next().ok_or("No primitive in mesh")?;
+    let buffers = vec![gltf::buffer::Data(buffer_data.to_vec())];
+
+    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+    let joints: Vec<[u16; 4]> = if let Some(joints_reader) = reader.read_joints(0) {
+        match joints_reader {
+            gltf::mesh::util::ReadJoints::U8(iter) => {
+                iter.map(|j| [j[0] as u16, j[1] as u16, j[2] as u16, j[3] as u16]).collect()
+            }
+            gltf::mesh::util::ReadJoints::U16(iter) => {
+                iter.collect()
+            }
+        }
+    } else {
+        return Err("No joints attribute found".into());
+    };
+
+    let weights: Vec<[f32; 4]> = if let Some(weights_reader) = reader.read_weights(0) {
+        match weights_reader {
+            gltf::mesh::util::ReadWeights::U8(iter) => {
+                iter.map(|w| [w[0] as f32, w[1] as f32, w[2] as f32, w[3] as f32]).collect()
+            }
+            gltf::mesh::util::ReadWeights::U16(iter) => {
+                iter.map(|w| [w[0] as f32, w[1] as f32, w[2] as f32, w[3] as f32]).collect()
+            }
+            gltf::mesh::util::ReadWeights::F32(iter) => {
+                iter.collect()
+            }
+        }
+    } else {
+        return Err("No weights attribute found".into());
+    };
+
+    Ok((joints, weights))
+}
+
 #[derive(Debug)]
 pub struct ParsedAnimationChannel {
     pub target_node: usize,
@@ -168,13 +215,19 @@ pub fn parse_animation_channels() -> Result<Vec<ParsedAnimationChannel>, Box<dyn
                         translations.map(|t| vec![t[0], t[1], t[2]]).collect()
                     }
                     gltf::animation::util::ReadOutputs::Rotations(rotations) => {
-                        rotations.into_f32().map(|r| vec![r[0], r[1], r[2], r[3]]).collect()
+                        rotations
+                            .into_f32()
+                            .map(|r| vec![r[0], r[1], r[2], r[3]])
+                            .collect()
                     }
                     gltf::animation::util::ReadOutputs::Scales(scales) => {
                         scales.map(|s| vec![s[0], s[1], s[2]]).collect()
                     }
                     gltf::animation::util::ReadOutputs::MorphTargetWeights(weights) => {
-                        weights.into_f32().map(|w| vec![w]).collect()
+                        weights
+                            .into_f32()
+                            .map(|w| vec![w])
+                            .collect()
                     }
                 }
             } else {
@@ -212,7 +265,7 @@ pub fn parse_animation_channels() -> Result<Vec<ParsedAnimationChannel>, Box<dyn
 }
 
 pub fn parse_mesh() -> Result<
-    (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u32>),
+    (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[u16; 4]>, Vec<[f32; 4]>, Vec<u32>),
     Box<dyn std::error::Error>
 > {
     let gltf_data = include_bytes!("assets/meshes/guy.gltf");
@@ -233,9 +286,38 @@ pub fn parse_mesh() -> Result<
         .ok_or("No position attribute")?
         .collect();
     let normals: Vec<[f32; 3]> = reader.read_normals().ok_or("No normal attribute")?.collect();
+    
+    // Parse joint data for skeletal animation
+    let joints: Vec<[u16; 4]> = reader
+        .read_joints(0)
+        .ok_or("No joint attribute")?
+        .into_u16()
+        .collect();
+    
+    // Parse weight data for skeletal animation
+    let weights: Vec<[f32; 4]> = if let Some(weights_reader) = reader.read_weights(0) {
+        match weights_reader {
+            gltf::mesh::util::ReadWeights::U8(iter) => {
+                iter.map(|w| [w[0] as f32 / 255.0, w[1] as f32 / 255.0, w[2] as f32 / 255.0, w[3] as f32 / 255.0]).collect()
+            }
+            gltf::mesh::util::ReadWeights::U16(iter) => {
+                iter.map(|w| [w[0] as f32 / 65535.0, w[1] as f32 / 65535.0, w[2] as f32 / 65535.0, w[3] as f32 / 65535.0]).collect()
+            }
+            gltf::mesh::util::ReadWeights::F32(iter) => {
+                iter.collect()
+            }
+        }
+    } else {
+        return Err("No weights attribute found".into());
+    };
+    
     let indices: Vec<u32> = reader.read_indices().ok_or("No indices found")?.into_u32().collect();
 
-    Ok((positions, normals, indices))
+    println!("🦴 Parsed mesh with {} vertices, {} joints per vertex, {} weights per vertex", positions.len(), 4, 4);
+    println!("🦴 First vertex joints: {:?}", joints.get(0));
+    println!("🦴 First vertex weights: {:?}", weights.get(0));
+
+    Ok((positions, normals, joints, weights, indices))
 }
 
 pub fn parse_nodes() -> Result<Skeleton, Box<dyn std::error::Error>> {
@@ -501,7 +583,7 @@ fn update_skeleton_from_transforms(
     let gltf_data = include_bytes!("assets/meshes/guy.gltf");
     let gltf = gltf::Gltf::from_slice(gltf_data).unwrap();
     let document = gltf.document;
-    
+
     // Build parent relationships
     let mut parents: HashMap<usize, usize> = HashMap::new();
     for scene in document.scenes() {
@@ -509,10 +591,14 @@ fn update_skeleton_from_transforms(
             build_parent_map(root_node, None, &mut parents);
         }
     }
-    
+
     // Calculate animated world transforms for all joints in hierarchical order
-    let animated_world_transforms = calculate_animated_world_transforms(&document, &parents, node_transforms);
-    
+    let animated_world_transforms = calculate_animated_world_transforms(
+        &document,
+        &parents,
+        node_transforms
+    );
+
     // Update skeleton bones based on animated joint positions
     update_bones_from_joint_transforms(skeleton, &animated_world_transforms, &parents);
 }
@@ -523,20 +609,20 @@ fn calculate_animated_world_transforms(
     node_transforms: &HashMap<usize, NodeTransform>
 ) -> HashMap<usize, mat4x4> {
     let mut world_transforms: HashMap<usize, mat4x4> = HashMap::new();
-    
+
     // Process nodes in hierarchical order (parents before children)
     for node in document.nodes() {
         if !parents.contains_key(&node.index()) {
             // This is a root node
             calculate_animated_node_world_transform(
-                node, 
-                &mat4x4_identity(), 
-                &mut world_transforms, 
+                node,
+                &mat4x4_identity(),
+                &mut world_transforms,
                 node_transforms
             );
         }
     }
-    
+
     world_transforms
 }
 
@@ -558,14 +644,19 @@ fn calculate_animated_node_world_transform(
         let (translation, rotation, scale) = node.transform().decomposed();
         mat4x4_from_transform(translation, rotation, scale)
     };
-    
+
     // Calculate world transform by combining parent world transform with local transform
     let world_transform = mat4x4_mul(*parent_world_transform, local_transform);
     world_transforms.insert(node.index(), world_transform);
-    
+
     // Recursively calculate for children
     for child in node.children() {
-        calculate_animated_node_world_transform(child, &world_transform, world_transforms, node_transforms);
+        calculate_animated_node_world_transform(
+            child,
+            &world_transform,
+            world_transforms,
+            node_transforms
+        );
     }
 }
 
@@ -578,15 +669,15 @@ fn update_bones_from_joint_transforms(
     // Each joint gets its own fixed-length bone (child-agnostic)
     for bone in &mut skeleton.bones {
         let joint_index = bone.node_index;
-        
+
         if let Some(joint_transform) = world_transforms.get(&joint_index) {
             let joint_pos = mat4x4_extract_translation(joint_transform);
-            
+
             // Create fixed-length bone (2.5 units) from this joint
             // Bone extends in the joint's local Y direction
             let fixed_bone_vector = [0.0, 2.5, 0.0];
             let transformed_vector = mat4x4_transform_direction(joint_transform, fixed_bone_vector);
-            
+
             bone.start_pos = joint_pos;
             bone.end_pos = [
                 joint_pos[0] + transformed_vector[0],
@@ -604,19 +695,31 @@ fn has_real_animation_data(channels: &[ParsedAnimationChannel]) -> bool {
             match channel.transform_type.as_str() {
                 "translation" => {
                     // Check if any translation is non-zero
-                    if transform.len() >= 3 && (transform[0] != 0.0 || transform[1] != 0.0 || transform[2] != 0.0) {
+                    if
+                        transform.len() >= 3 &&
+                        (transform[0] != 0.0 || transform[1] != 0.0 || transform[2] != 0.0)
+                    {
                         return true;
                     }
                 }
                 "rotation" => {
                     // Check if any rotation is not identity quaternion [0,0,0,1]
-                    if transform.len() >= 4 && (transform[0] != 0.0 || transform[1] != 0.0 || transform[2] != 0.0 || transform[3] != 1.0) {
+                    if
+                        transform.len() >= 4 &&
+                        (transform[0] != 0.0 ||
+                            transform[1] != 0.0 ||
+                            transform[2] != 0.0 ||
+                            transform[3] != 1.0)
+                    {
                         return true;
                     }
                 }
                 "scale" => {
                     // Check if any scale is not identity [1,1,1]
-                    if transform.len() >= 3 && (transform[0] != 1.0 || transform[1] != 1.0 || transform[2] != 1.0) {
+                    if
+                        transform.len() >= 3 &&
+                        (transform[0] != 1.0 || transform[1] != 1.0 || transform[2] != 1.0)
+                    {
                         return true;
                     }
                 }
@@ -720,6 +823,89 @@ fn compile_shader(
 
 // === BUFFER SETUP ===
 
+fn setup_buffers_with_joints_and_weights(
+    gl: &glow::Context,
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    joints: &[[u16; 4]],
+    weights: &[[f32; 4]],
+    indices: &[u32]
+) -> Result<(glow::VertexArray, glow::Buffer, glow::Buffer, glow::Buffer, glow::Buffer), String> {
+    unsafe {
+        let vao = gl.create_vertex_array()?;
+        let main_vbo = gl.create_buffer()?;
+        let joints_vbo = gl.create_buffer()?;
+        let ebo = gl.create_buffer()?;
+
+        gl.bind_vertex_array(Some(vao));
+
+        // Buffer 1: Positions + Normals (all f32)
+        let mut main_vertex_data = Vec::new();
+        for i in 0..positions.len() {
+            main_vertex_data.extend_from_slice(&positions[i]);  // 3 f32
+            main_vertex_data.extend_from_slice(&normals[i]);    // 3 f32
+        }
+
+        // Buffer 2: Joints only (all u16)
+        let joints_data: Vec<u16> = joints.iter().flatten().copied().collect();
+
+        // Buffer 3: Weights only (all f32)
+        let weights_data: Vec<f32> = weights.iter().flatten().copied().collect();
+
+        // Setup main buffer (positions + normals)
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(main_vbo));
+        gl.buffer_data_u8_slice(
+            glow::ARRAY_BUFFER,
+            bytemuck::cast_slice(&main_vertex_data),
+            glow::STATIC_DRAW
+        );
+
+        let main_stride = 6 * (std::mem::size_of::<f32>() as i32); // 3 pos + 3 normal
+        // Location 0: positions
+        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, main_stride, 0);
+        gl.enable_vertex_attrib_array(0);
+        // Location 1: normals  
+        gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, main_stride, 3 * 4);
+        gl.enable_vertex_attrib_array(1);
+
+        // Setup joints buffer
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(joints_vbo));
+        gl.buffer_data_u8_slice(
+            glow::ARRAY_BUFFER,
+            bytemuck::cast_slice(&joints_data),
+            glow::STATIC_DRAW
+        );
+
+        // Location 2: joints (4 u16 = 8 bytes stride)
+        gl.vertex_attrib_pointer_i32(2, 4, glow::UNSIGNED_SHORT, 8, 0);
+        gl.enable_vertex_attrib_array(2);
+
+        // Setup weights buffer
+        let weights_vbo = gl.create_buffer()?;
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(weights_vbo));
+        gl.buffer_data_u8_slice(
+            glow::ARRAY_BUFFER,
+            bytemuck::cast_slice(&weights_data),
+            glow::STATIC_DRAW
+        );
+
+        // Location 3: weights (4 f32 = 16 bytes stride)
+        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, 16, 0);
+        gl.enable_vertex_attrib_array(3);
+
+        // Setup index buffer
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+        gl.buffer_data_u8_slice(
+            glow::ELEMENT_ARRAY_BUFFER,
+            bytemuck::cast_slice(indices),
+            glow::STATIC_DRAW
+        );
+
+        gl.bind_vertex_array(None);
+        Ok((vao, main_vbo, joints_vbo, weights_vbo, ebo))
+    }
+}
+
 fn setup_buffers(
     gl: &glow::Context,
     vertices: &[f32],
@@ -785,12 +971,14 @@ pub struct Program {
     shader_program: glow::Program,
     vao: glow::VertexArray,
     vbo: glow::Buffer,
+    joints_vbo: glow::Buffer, // Separate buffer for joint data
+    weights_vbo: glow::Buffer, // Separate buffer for weight data
     ebo: glow::Buffer,
     index_count: i32,
     line_vao: glow::VertexArray,
     line_vbo: glow::Buffer,
-    original_skeleton: Skeleton,  // Keep the working skeleton
-    skeleton: Skeleton,           // Current skeleton (may be animated)
+    original_skeleton: Skeleton, // Keep the working skeleton
+    skeleton: Skeleton, // Current skeleton (may be animated)
     bone_count: i32,
     animation_channels: Vec<ParsedAnimationChannel>,
     node_transforms: HashMap<usize, NodeTransform>,
@@ -798,11 +986,13 @@ pub struct Program {
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
-        let (positions, normals, indices) = parse_mesh().map_err(|e|
+        let (positions, normals, joints, weights, indices) = parse_mesh().map_err(|e|
             format!("Failed to parse mesh: {}", e)
         )?;
 
-        let original_skeleton = parse_nodes().map_err(|e| format!("Failed to parse skeleton: {}", e))?;
+        let original_skeleton = parse_nodes().map_err(|e|
+            format!("Failed to parse skeleton: {}", e)
+        )?;
 
         let animation_channels = match parse_animation_channels() {
             Ok(channels) => channels,
@@ -814,7 +1004,11 @@ impl Program {
 
         // Check if we have real animation data
         let has_real_animation = has_real_animation_data(&animation_channels);
-        println!("🎬 Animation data detected: {}", if has_real_animation { "REAL" } else { "DUMMY" });
+        println!("🎬 Animation data detected: {}", if has_real_animation {
+            "REAL"
+        } else {
+            "DUMMY"
+        });
 
         let mut node_transforms: HashMap<usize, NodeTransform> = HashMap::new();
         let mut skeleton = original_skeleton.clone();
@@ -860,7 +1054,7 @@ impl Program {
             gl.use_program(Some(program));
             gl.enable(glow::DEPTH_TEST);
 
-            let (vao, vbo, ebo) = setup_buffers(&gl, &vertices, &indices)?;
+            let (vao, vbo, joints_vbo, weights_vbo, ebo) = setup_buffers_with_joints_and_weights(&gl, &positions, &normals, &joints, &weights, &indices)?;
             let (line_vao, line_vbo) = setup_line_buffers(&gl, &line_vertices)?;
 
             Ok(Self {
@@ -868,6 +1062,8 @@ impl Program {
                 shader_program: program,
                 vao,
                 vbo,
+                joints_vbo,
+                weights_vbo,
                 ebo,
                 index_count: indices.len() as i32,
                 line_vao,
@@ -886,7 +1082,7 @@ impl Program {
         if has_real_animation_data(&self.animation_channels) {
             apply_animation(delta_time, &self.animation_channels, &mut self.node_transforms);
             update_skeleton_from_transforms(&mut self.skeleton, &self.node_transforms);
-            
+
             // Update line vertices with animated skeleton
             let line_vertices = skeleton_to_line_vertices(&self.skeleton);
             unsafe {
@@ -918,15 +1114,20 @@ impl Program {
             if let Some(u) = self.gl.get_uniform_location(self.shader_program, "viewport_txfm") {
                 self.gl.uniform_matrix_4_f32_slice(Some(&u), true, &view);
             }
+            if let Some(u) = self.gl.get_uniform_location(self.shader_program, "preview_joint") {
+                self.gl.uniform_1_u32(Some(&u), 1); // Set preview joint to 0
+            }
 
+            // Render skeleton lines (no joints attribute needed)
             self.gl.line_width(8.0);
             self.gl.bind_vertex_array(Some(self.line_vao));
             self.gl.draw_arrays(glow::LINES, 0, self.bone_count * 2);
             self.gl.bind_vertex_array(None);
 
-            // Optionally render the mesh as well
-            // self.gl.bind_vertex_array(Some(self.vao));
-            // self.gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
+            // Render the mesh with joints
+            self.gl.bind_vertex_array(Some(self.vao));
+            self.gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
+            self.gl.bind_vertex_array(None);
         }
         Ok(())
     }
@@ -936,6 +1137,8 @@ impl Program {
             self.gl.delete_program(self.shader_program);
             self.gl.delete_vertex_array(self.vao);
             self.gl.delete_buffer(self.vbo);
+            self.gl.delete_buffer(self.joints_vbo);
+            self.gl.delete_buffer(self.weights_vbo);
             self.gl.delete_buffer(self.ebo);
             self.gl.delete_vertex_array(self.line_vao);
             self.gl.delete_buffer(self.line_vbo);
