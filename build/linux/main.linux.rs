@@ -100,7 +100,7 @@ impl ApplicationHandler for App {
                     let (Some(surface), Some(context), Some(program)) = (
                         &self.gl_surface,
                         &self.gl_context,
-                        &self.program,
+                        &mut self.program,
                     )
                 {
                     if let Some(window) = &self.window {

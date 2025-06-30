@@ -1,7 +1,6 @@
 use glow::HasContext;
 use std::collections::{ HashMap, HashSet };
 use gltf::{ animation::Property, buffer::Data };
-use gltf::animation::util::ReadOutputs;
 use std::error::Error;
 
 // === MATH HELPERS ===
@@ -115,7 +114,7 @@ pub struct Bone {
     pub parent_index: Option<usize>, // Parent bone index
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Skeleton {
     pub bones: Vec<Bone>,
     pub root_bones: Vec<usize>, // Indices of root bones
@@ -161,25 +160,41 @@ pub fn parse_animation_channels() -> Result<Vec<ParsedAnimationChannel>, Box<dyn
 
         let timestamps_count = timestamps.len();
 
-        // Extract transform data - use a generic approach that works with any ReadOutputs version
+        // Extract real transform data from GLTF animation
         let transforms: Vec<Vec<f32>> = {
-            // For now, create dummy data based on property type and timestamps count
-            // This allows compilation while maintaining the correct data structure
-            match property {
-                Property::Translation | Property::Scale => {
-                    // Vec3 data - create dummy [0,0,0] for each timestamp
-                    (0..timestamps_count).map(|_| vec![0.0, 0.0, 0.0]).collect()
+            if let Some(outputs) = reader.read_outputs() {
+                match outputs {
+                    gltf::animation::util::ReadOutputs::Translations(translations) => {
+                        translations.map(|t| vec![t[0], t[1], t[2]]).collect()
+                    }
+                    gltf::animation::util::ReadOutputs::Rotations(rotations) => {
+                        rotations.into_f32().map(|r| vec![r[0], r[1], r[2], r[3]]).collect()
+                    }
+                    gltf::animation::util::ReadOutputs::Scales(scales) => {
+                        scales.map(|s| vec![s[0], s[1], s[2]]).collect()
+                    }
+                    gltf::animation::util::ReadOutputs::MorphTargetWeights(weights) => {
+                        weights.into_f32().map(|w| vec![w]).collect()
+                    }
                 }
-                Property::Rotation => {
-                    // Vec4 data (quaternions) - create dummy [0,0,0,1] for each timestamp
-                    (0..timestamps_count).map(|_| vec![0.0, 0.0, 0.0, 1.0]).collect()
-                }
-                Property::MorphTargetWeights => {
-                    // Scalar data - create dummy [0] for each timestamp
-                    (0..timestamps_count).map(|_| vec![0.0]).collect()
-                }
-                _ => {
-                    return Err("Unexpected animation property type".into());
+            } else {
+                // Fallback to dummy data if reading fails
+                match property {
+                    Property::Translation => {
+                        (0..timestamps_count).map(|_| vec![0.0, 0.0, 0.0]).collect()
+                    }
+                    Property::Scale => {
+                        (0..timestamps_count).map(|_| vec![1.0, 1.0, 1.0]).collect()
+                    }
+                    Property::Rotation => {
+                        (0..timestamps_count).map(|_| vec![0.0, 0.0, 0.0, 1.0]).collect()
+                    }
+                    Property::MorphTargetWeights => {
+                        (0..timestamps_count).map(|_| vec![0.0]).collect()
+                    }
+                    _ => {
+                        return Err("Unexpected animation property type".into());
+                    }
                 }
             }
         };
@@ -382,74 +397,28 @@ fn generate_skeleton_bones(
 ) -> Vec<Bone> {
     let mut bones = Vec::new();
 
-    // Create a set for fast lookup of joint indices
-    let joint_set: HashSet<usize> = joint_indices.iter().cloned().collect();
-
-    // Track which joints have children (are parents)
-    let mut joints_with_children: HashSet<usize> = HashSet::new();
-
-    // First pass: create parent-child bones using position-based approach (working method)
+    // Create one bone per joint (child-agnostic approach)
     for &joint_index in joint_indices {
-        // Only create bones between skeleton joints
-        if let Some(parent_index) = parents.get(&joint_index) {
-            // Check if parent is also a skeleton joint
-            if joint_set.contains(parent_index) {
-                if
-                    let (Some(parent_transform), Some(child_transform)) = (
-                        world_transforms.get(parent_index),
-                        world_transforms.get(&joint_index),
-                    )
-                {
-                    let start_pos = mat4x4_extract_translation(parent_transform);
-                    let end_pos = mat4x4_extract_translation(child_transform);
+        if let Some(joint_transform) = world_transforms.get(&joint_index) {
+            let joint_pos = mat4x4_extract_translation(joint_transform);
 
-                    bones.push(Bone {
-                        start_pos,
-                        end_pos,
-                        node_index: joint_index,
-                        parent_index: Some(*parent_index),
-                    });
+            // Create fixed-length bone (2.5 units) from this joint
+            // Bone extends in the joint's local Y direction
+            let fixed_bone_vector = [0.0, 2.5, 0.0];
+            let transformed_vector = mat4x4_transform_direction(joint_transform, fixed_bone_vector);
 
-                    // Mark the parent as having children
-                    joints_with_children.insert(*parent_index);
-                }
-            }
-        }
-    }
+            let bone_end_pos = [
+                joint_pos[0] + transformed_vector[0],
+                joint_pos[1] + transformed_vector[1],
+                joint_pos[2] + transformed_vector[2],
+            ];
 
-    // Second pass: create leaf bones for joints without children
-    for &joint_index in joint_indices {
-        // If this joint is not a parent of any other joint, it's a leaf
-        if !joints_with_children.contains(&joint_index) {
-            if let Some(joint_transform) = world_transforms.get(&joint_index) {
-                let joint_pos = mat4x4_extract_translation(joint_transform);
-
-                // Create a leaf bone using fixed vector approach (like reference repository)
-                let leaf_end_pos = {
-                    // Fixed bone vector: 3.0 units in +Y direction
-                    let fixed_bone_vector = [0.0, 3.0, 0.0];
-
-                    // Transform the fixed vector by the joint's world matrix
-                    let transformed_vector = mat4x4_transform_direction(
-                        joint_transform,
-                        fixed_bone_vector
-                    );
-
-                    // End position = start + transformed vector
-                    [
-                        joint_pos[0] + transformed_vector[0],
-                        joint_pos[1] + transformed_vector[1],
-                        joint_pos[2] + transformed_vector[2],
-                    ]
-                };
-
-                bones.push(Bone {
-                    start_pos: joint_pos,
-                    end_pos: leaf_end_pos,
-                    node_index: joint_index,
-                    parent_index: parents.get(&joint_index).copied(),
-                });
-            }
+            bones.push(Bone {
+                start_pos: joint_pos,
+                end_pos: bone_end_pos,
+                node_index: joint_index,
+                parent_index: parents.get(&joint_index).copied(),
+            });
         }
     }
 
@@ -467,6 +436,258 @@ fn skeleton_to_line_vertices(skeleton: &Skeleton) -> Vec<f32> {
     }
 
     vertices
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeTransform {
+    pub translation: [f32; 3],
+    pub rotation: [f32; 4],
+    pub scale: [f32; 3],
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + t * (b - a)
+}
+
+fn slerp(q1: [f32; 4], q2: [f32; 4], t: f32) -> [f32; 4] {
+    let mut q1 = q1;
+    let mut q2 = q2;
+    let mut dot = q1
+        .iter()
+        .zip(q2.iter())
+        .map(|(a, b)| a * b)
+        .sum::<f32>();
+
+    if dot < 0.0 {
+        dot = -dot;
+        q2 = [-q2[0], -q2[1], -q2[2], -q2[3]];
+    }
+
+    if dot > 0.9995 {
+        let result: Vec<f32> = q1
+            .iter()
+            .zip(q2.iter())
+            .map(|(a, b)| lerp(*a, *b, t))
+            .collect();
+        let norm = result
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
+        return [result[0] / norm, result[1] / norm, result[2] / norm, result[3] / norm];
+    }
+
+    let theta_0 = dot.acos();
+    let theta = theta_0 * t;
+    let sin_theta = theta.sin();
+    let sin_theta_0 = theta_0.sin();
+
+    let s0 = (theta_0 - theta).sin() / sin_theta_0;
+    let s1 = sin_theta / sin_theta_0;
+
+    [
+        s0 * q1[0] + s1 * q2[0],
+        s0 * q1[1] + s1 * q2[1],
+        s0 * q1[2] + s1 * q2[2],
+        s0 * q1[3] + s1 * q2[3],
+    ]
+}
+
+fn update_skeleton_from_transforms(
+    skeleton: &mut Skeleton,
+    node_transforms: &HashMap<usize, NodeTransform>
+) {
+    // Parse GLTF to get base structure and parent relationships
+    let gltf_data = include_bytes!("assets/meshes/guy.gltf");
+    let gltf = gltf::Gltf::from_slice(gltf_data).unwrap();
+    let document = gltf.document;
+    
+    // Build parent relationships
+    let mut parents: HashMap<usize, usize> = HashMap::new();
+    for scene in document.scenes() {
+        for root_node in scene.nodes() {
+            build_parent_map(root_node, None, &mut parents);
+        }
+    }
+    
+    // Calculate animated world transforms for all joints in hierarchical order
+    let animated_world_transforms = calculate_animated_world_transforms(&document, &parents, node_transforms);
+    
+    // Update skeleton bones based on animated joint positions
+    update_bones_from_joint_transforms(skeleton, &animated_world_transforms, &parents);
+}
+
+fn calculate_animated_world_transforms(
+    document: &gltf::Document,
+    parents: &HashMap<usize, usize>,
+    node_transforms: &HashMap<usize, NodeTransform>
+) -> HashMap<usize, mat4x4> {
+    let mut world_transforms: HashMap<usize, mat4x4> = HashMap::new();
+    
+    // Process nodes in hierarchical order (parents before children)
+    for node in document.nodes() {
+        if !parents.contains_key(&node.index()) {
+            // This is a root node
+            calculate_animated_node_world_transform(
+                node, 
+                &mat4x4_identity(), 
+                &mut world_transforms, 
+                node_transforms
+            );
+        }
+    }
+    
+    world_transforms
+}
+
+fn calculate_animated_node_world_transform(
+    node: gltf::Node,
+    parent_world_transform: &mat4x4,
+    world_transforms: &mut HashMap<usize, mat4x4>,
+    node_transforms: &HashMap<usize, NodeTransform>
+) {
+    // Get local transform - use animated transform if available, otherwise use base transform
+    let local_transform = if let Some(animated_transform) = node_transforms.get(&node.index()) {
+        mat4x4_from_transform(
+            animated_transform.translation,
+            animated_transform.rotation,
+            animated_transform.scale
+        )
+    } else {
+        // Use base transform from GLTF
+        let (translation, rotation, scale) = node.transform().decomposed();
+        mat4x4_from_transform(translation, rotation, scale)
+    };
+    
+    // Calculate world transform by combining parent world transform with local transform
+    let world_transform = mat4x4_mul(*parent_world_transform, local_transform);
+    world_transforms.insert(node.index(), world_transform);
+    
+    // Recursively calculate for children
+    for child in node.children() {
+        calculate_animated_node_world_transform(child, &world_transform, world_transforms, node_transforms);
+    }
+}
+
+fn update_bones_from_joint_transforms(
+    skeleton: &mut Skeleton,
+    world_transforms: &HashMap<usize, mat4x4>,
+    _parents: &HashMap<usize, usize>
+) {
+    // Update each bone based on the animated joint positions
+    // Each joint gets its own fixed-length bone (child-agnostic)
+    for bone in &mut skeleton.bones {
+        let joint_index = bone.node_index;
+        
+        if let Some(joint_transform) = world_transforms.get(&joint_index) {
+            let joint_pos = mat4x4_extract_translation(joint_transform);
+            
+            // Create fixed-length bone (2.5 units) from this joint
+            // Bone extends in the joint's local Y direction
+            let fixed_bone_vector = [0.0, 2.5, 0.0];
+            let transformed_vector = mat4x4_transform_direction(joint_transform, fixed_bone_vector);
+            
+            bone.start_pos = joint_pos;
+            bone.end_pos = [
+                joint_pos[0] + transformed_vector[0],
+                joint_pos[1] + transformed_vector[1],
+                joint_pos[2] + transformed_vector[2],
+            ];
+        }
+    }
+}
+
+fn has_real_animation_data(channels: &[ParsedAnimationChannel]) -> bool {
+    // Check if any channel has non-zero/non-identity transforms
+    for channel in channels {
+        for transform in &channel.transforms {
+            match channel.transform_type.as_str() {
+                "translation" => {
+                    // Check if any translation is non-zero
+                    if transform.len() >= 3 && (transform[0] != 0.0 || transform[1] != 0.0 || transform[2] != 0.0) {
+                        return true;
+                    }
+                }
+                "rotation" => {
+                    // Check if any rotation is not identity quaternion [0,0,0,1]
+                    if transform.len() >= 4 && (transform[0] != 0.0 || transform[1] != 0.0 || transform[2] != 0.0 || transform[3] != 1.0) {
+                        return true;
+                    }
+                }
+                "scale" => {
+                    // Check if any scale is not identity [1,1,1]
+                    if transform.len() >= 3 && (transform[0] != 1.0 || transform[1] != 1.0 || transform[2] != 1.0) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    false
+}
+
+fn apply_animation(
+    time_since_start: f32,
+    animation_channels: &[ParsedAnimationChannel],
+    node_transforms: &mut HashMap<usize, NodeTransform>
+) {
+    for channel in animation_channels {
+        if channel.timestamps.is_empty() || channel.transforms.is_empty() {
+            continue;
+        }
+
+        let duration = *channel.timestamps.last().unwrap();
+        let rel_time = time_since_start % duration;
+
+        let mut last_index = 0;
+        for (i, &timestamp) in channel.timestamps.iter().enumerate() {
+            if rel_time >= timestamp {
+                last_index = i;
+            } else {
+                break;
+            }
+        }
+
+        let next_index = if last_index + 1 < channel.timestamps.len() {
+            last_index + 1
+        } else {
+            last_index
+        };
+
+        let t0 = channel.timestamps[last_index];
+        let t1 = channel.timestamps[next_index];
+        let delta = if t1 - t0 > 0.0 { t1 - t0 } else { 1.0 };
+        let alpha = (rel_time - t0) / delta;
+
+        let transform0 = &channel.transforms[last_index];
+        let transform1 = &channel.transforms[next_index];
+
+        let node = node_transforms.entry(channel.target_node).or_insert_with(|| NodeTransform {
+            translation: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            scale: [1.0, 1.0, 1.0],
+        });
+
+        match channel.transform_type.as_str() {
+            "translation" => {
+                for i in 0..3 {
+                    node.translation[i] = lerp(transform0[i], transform1[i], alpha);
+                }
+            }
+            "scale" => {
+                for i in 0..3 {
+                    node.scale[i] = lerp(transform0[i], transform1[i], alpha);
+                }
+            }
+            "rotation" => {
+                let q0 = [transform0[0], transform0[1], transform0[2], transform0[3]];
+                let q1 = [transform1[0], transform1[1], transform1[2], transform1[3]];
+                node.rotation = slerp(q0, q1, alpha);
+            }
+            _ => {}
+        }
+    }
 }
 
 // === SHADER COMPILATION ===
@@ -568,8 +789,11 @@ pub struct Program {
     index_count: i32,
     line_vao: glow::VertexArray,
     line_vbo: glow::Buffer,
-    skeleton: Skeleton,
+    original_skeleton: Skeleton,  // Keep the working skeleton
+    skeleton: Skeleton,           // Current skeleton (may be animated)
     bone_count: i32,
+    animation_channels: Vec<ParsedAnimationChannel>,
+    node_transforms: HashMap<usize, NodeTransform>,
 }
 
 impl Program {
@@ -578,7 +802,7 @@ impl Program {
             format!("Failed to parse mesh: {}", e)
         )?;
 
-        let skeleton = parse_nodes().map_err(|e| format!("Failed to parse skeleton: {}", e))?;
+        let original_skeleton = parse_nodes().map_err(|e| format!("Failed to parse skeleton: {}", e))?;
 
         let animation_channels = match parse_animation_channels() {
             Ok(channels) => channels,
@@ -588,30 +812,29 @@ impl Program {
             }
         };
 
-        println!("🎬 Parsed {} animation channels:", animation_channels.len());
-        for (i, channel) in animation_channels.iter().enumerate() {
-            println!(
-                "  Channel {}: Node {} | Type: {} | {} keyframes",
-                i,
-                channel.target_node,
-                channel.transform_type,
-                channel.timestamps_count
-            );
-            println!("    Timestamps: {:?}", channel.timestamps);
-            println!(
-                "    Transforms: {:?}",
-                &channel.transforms[..channel.transforms.len().min(3)]
-            );
-        }
+        // Check if we have real animation data
+        let has_real_animation = has_real_animation_data(&animation_channels);
+        println!("🎬 Animation data detected: {}", if has_real_animation { "REAL" } else { "DUMMY" });
 
+        let mut node_transforms: HashMap<usize, NodeTransform> = HashMap::new();
+        let mut skeleton = original_skeleton.clone();
+
+        // Only apply animation if we have real data
+        if has_real_animation {
+            apply_animation(0.0, &animation_channels, &mut node_transforms);
+            update_skeleton_from_transforms(&mut skeleton, &node_transforms);
+        }
+        // Otherwise, keep the original skeleton unchanged
+
+        // Create vertices from positions and normals for mesh rendering
         let vertices: Vec<f32> = positions
             .iter()
             .zip(normals.iter())
             .flat_map(|(p, n)| [p[0], p[1], p[2], n[0], n[1], n[2]])
             .collect();
 
-        // Generate line vertices from skeleton
         let line_vertices = skeleton_to_line_vertices(&skeleton);
+
         let bone_count = skeleton.bones.len() as i32;
 
         unsafe {
@@ -649,20 +872,41 @@ impl Program {
                 index_count: indices.len() as i32,
                 line_vao,
                 line_vbo,
+                original_skeleton,
                 skeleton,
                 bone_count,
+                animation_channels,
+                node_transforms,
             })
         }
     }
 
-    pub fn render(&self, width: u32, height: u32, delta_time: f32) -> Result<(), String> {
+    pub fn render(&mut self, width: u32, height: u32, delta_time: f32) -> Result<(), String> {
+        // Only apply animation if we have real animation data
+        if has_real_animation_data(&self.animation_channels) {
+            apply_animation(delta_time, &self.animation_channels, &mut self.node_transforms);
+            update_skeleton_from_transforms(&mut self.skeleton, &self.node_transforms);
+            
+            // Update line vertices with animated skeleton
+            let line_vertices = skeleton_to_line_vertices(&self.skeleton);
+            unsafe {
+                self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.line_vbo));
+                self.gl.buffer_data_u8_slice(
+                    glow::ARRAY_BUFFER,
+                    bytemuck::cast_slice(&line_vertices),
+                    glow::DYNAMIC_DRAW
+                );
+            }
+        } else {
+            // Use original skeleton - no animation updates needed
+            // The line buffer already contains the original skeleton vertices
+        }
+
         unsafe {
             self.gl.viewport(0, 0, width as i32, height as i32);
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
             self.gl.use_program(Some(self.shader_program));
-
-            self.gl.line_width(8.0);
 
             let angle = delta_time.rem_euclid(std::f32::consts::TAU);
             let world = mat4x4_mul(mat4x4_translate(0.0, 0.0, -6.0), mat4x4_rot_y(angle));
@@ -675,12 +919,10 @@ impl Program {
                 self.gl.uniform_matrix_4_f32_slice(Some(&u), true, &view);
             }
 
-            // Render the skeleton bones
-            if self.bone_count > 0 {
-                self.gl.bind_vertex_array(Some(self.line_vao));
-                self.gl.draw_arrays(glow::LINES, 0, self.bone_count * 2);
-                self.gl.bind_vertex_array(None);
-            }
+            self.gl.line_width(8.0);
+            self.gl.bind_vertex_array(Some(self.line_vao));
+            self.gl.draw_arrays(glow::LINES, 0, self.bone_count * 2);
+            self.gl.bind_vertex_array(None);
 
             // Optionally render the mesh as well
             // self.gl.bind_vertex_array(Some(self.vao));
