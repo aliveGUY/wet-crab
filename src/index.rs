@@ -1,7 +1,6 @@
 use glow::HasContext;
-use std::fs::File;
-use std::io::Read;
-use std::time::Instant;
+use web_time::Instant;
+use gltf::buffer::Data;
 
 // === MATH HELPERS (Row-major like the C implementation) ===
 
@@ -144,26 +143,52 @@ struct Model {
     joint_inverse_mats: Vec<Mat4x4>,
 }
 
-// === FILE LOADING ===
+// === GLTF LOADING ===
 
-fn load_file(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let mut file = File::open(path)?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
-    Ok(buffer)
+fn extract_buffer_data<T: bytemuck::Pod>(
+    buffers: &[Data],
+    accessor: &gltf::Accessor,
+) -> Result<Vec<T>, Box<dyn std::error::Error>> {
+    let view = accessor.view().ok_or("Missing buffer view")?;
+    let buffer = &buffers[view.buffer().index()];
+    let start = view.offset() + accessor.offset();
+    let end = start + accessor.count() * accessor.size();
+    
+    if end > buffer.len() {
+        return Err("Buffer overflow".into());
+    }
+    
+    let slice = &buffer[start..end];
+    let typed_slice = bytemuck::cast_slice(slice);
+    Ok(typed_slice.to_vec())
 }
 
 fn load_model(gl: &glow::Context) -> Result<Model, Box<dyn std::error::Error>> {
-    println!("🔄 Loading binary mesh data...");
+    println!("🔄 Loading embedded GLTF data...");
 
-    // Load mesh data
-    let positions_data = load_file("src/assets/meshes/positions.bin")?;
-    let normals_data = load_file("src/assets/meshes/normals.bin")?;
-    let indices_data = load_file("src/assets/meshes/indices.bin")?;
-    let vert_joints_data = load_file("src/assets/meshes/vert_joints.bin")?;
-    let vert_weights_data = load_file("src/assets/meshes/vert_weights.bin")?;
-    let nodes_data = load_file("src/assets/meshes/nodes.bin")?;
-    let joint_info_data = load_file("src/assets/meshes/joint_info.bin")?;
+    // Load embedded GLTF data
+    let gltf_json = include_str!("assets/meshes/guy.gltf");
+    let gltf_bin = include_bytes!("assets/meshes/guy.bin");
+    
+    let gltf = gltf::Gltf::from_slice(gltf_json.as_bytes())?;
+    let buffers = vec![gltf::buffer::Data(gltf_bin.to_vec())];
+
+    // Get the first mesh (we know there's only one)
+    let mesh = gltf.meshes().next().ok_or("No mesh found")?;
+    let primitive = mesh.primitives().next().ok_or("No primitive found")?;
+
+    // Extract mesh data
+    let positions_accessor = primitive.get(&gltf::Semantic::Positions).ok_or("No positions")?;
+    let normals_accessor = primitive.get(&gltf::Semantic::Normals).ok_or("No normals")?;
+    let joints_accessor = primitive.get(&gltf::Semantic::Joints(0)).ok_or("No joints")?;
+    let weights_accessor = primitive.get(&gltf::Semantic::Weights(0)).ok_or("No weights")?;
+    let indices_accessor = primitive.indices().ok_or("No indices")?;
+
+    let positions: Vec<f32> = extract_buffer_data(&buffers, &positions_accessor)?;
+    let normals: Vec<f32> = extract_buffer_data(&buffers, &normals_accessor)?;
+    let joints: Vec<u8> = extract_buffer_data(&buffers, &joints_accessor)?;
+    let weights: Vec<f32> = extract_buffer_data(&buffers, &weights_accessor)?;
+    let indices: Vec<u16> = extract_buffer_data(&buffers, &indices_accessor)?;
 
     unsafe {
         // Create VAO
@@ -173,246 +198,130 @@ fn load_model(gl: &glow::Context) -> Result<Model, Box<dyn std::error::Error>> {
         // Position buffer (location 1)
         let position_buffer = gl.create_buffer()?;
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(position_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &positions_data, glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&positions), glow::STATIC_DRAW);
         gl.enable_vertex_attrib_array(1);
         gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 12, 0);
 
         // Normal buffer (location 0)
         let normals_buffer = gl.create_buffer()?;
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(normals_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &normals_data, glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&normals), glow::STATIC_DRAW);
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 12, 0);
 
         // Joints buffer (location 2)
         let joints_buffer = gl.create_buffer()?;
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(joints_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &vert_joints_data, glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &joints, glow::STATIC_DRAW);
         gl.enable_vertex_attrib_array(2);
         gl.vertex_attrib_pointer_i32(2, 4, glow::UNSIGNED_BYTE, 4, 0);
 
         // Weights buffer (location 3)
         let weights_buffer = gl.create_buffer()?;
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(weights_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &vert_weights_data, glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&weights), glow::STATIC_DRAW);
         gl.enable_vertex_attrib_array(3);
         gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, 16, 0);
 
         // Index buffer
         let ebo = gl.create_buffer()?;
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
-        gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, &indices_data, glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytemuck::cast_slice(&indices), glow::STATIC_DRAW);
 
         gl.bind_vertex_array(None);
 
-        // Parse nodes
+        // Extract node hierarchy
         println!("🔄 Loading node hierarchy...");
-        let num_nodes = nodes_data.len() / 44; // 11 * 4 bytes per node
         let mut nodes = Vec::new();
+        let mut node_parents = vec![u32::MAX; gltf.nodes().len()];
 
-        for i in 0..num_nodes {
-            let offset = i * 44;
-            let translation = [
-                f32::from_le_bytes([
-                    nodes_data[offset],
-                    nodes_data[offset + 1],
-                    nodes_data[offset + 2],
-                    nodes_data[offset + 3],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 4],
-                    nodes_data[offset + 5],
-                    nodes_data[offset + 6],
-                    nodes_data[offset + 7],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 8],
-                    nodes_data[offset + 9],
-                    nodes_data[offset + 10],
-                    nodes_data[offset + 11],
-                ]),
-            ];
-            let rotation = [
-                f32::from_le_bytes([
-                    nodes_data[offset + 12],
-                    nodes_data[offset + 13],
-                    nodes_data[offset + 14],
-                    nodes_data[offset + 15],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 16],
-                    nodes_data[offset + 17],
-                    nodes_data[offset + 18],
-                    nodes_data[offset + 19],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 20],
-                    nodes_data[offset + 21],
-                    nodes_data[offset + 22],
-                    nodes_data[offset + 23],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 24],
-                    nodes_data[offset + 25],
-                    nodes_data[offset + 26],
-                    nodes_data[offset + 27],
-                ]),
-            ];
-            let scale = [
-                f32::from_le_bytes([
-                    nodes_data[offset + 28],
-                    nodes_data[offset + 29],
-                    nodes_data[offset + 30],
-                    nodes_data[offset + 31],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 32],
-                    nodes_data[offset + 33],
-                    nodes_data[offset + 34],
-                    nodes_data[offset + 35],
-                ]),
-                f32::from_le_bytes([
-                    nodes_data[offset + 36],
-                    nodes_data[offset + 37],
-                    nodes_data[offset + 38],
-                    nodes_data[offset + 39],
-                ]),
-            ];
-            let parent = u32::from_le_bytes([
-                nodes_data[offset + 40],
-                nodes_data[offset + 41],
-                nodes_data[offset + 42],
-                nodes_data[offset + 43],
-            ]);
-
-            nodes.push(Node { translation, rotation, scale, parent });
+        // Build parent relationships
+        for node in gltf.nodes() {
+            for child in node.children() {
+                node_parents[child.index()] = node.index() as u32;
+            }
         }
 
-        // Load animations
+        // Extract node data
+        for node in gltf.nodes() {
+            let (translation, rotation, scale) = node.transform().decomposed();
+            nodes.push(Node {
+                translation,
+                rotation,
+                scale,
+                parent: node_parents[node.index()],
+            });
+        }
+
+        // Extract animations
         println!("🔄 Loading animation data...");
         let mut animation_channels = Vec::new();
-        for i in 0..30 {
-            // We know there are 30 animation files
-            let path = format!("src/assets/meshes/animations_{}.bin", i);
-            if let Ok(animation_data) = load_file(&path) {
-                let target_node = u32::from_le_bytes([
-                    animation_data[0],
-                    animation_data[1],
-                    animation_data[2],
-                    animation_data[3],
-                ]);
-                let target_path = u32::from_le_bytes([
-                    animation_data[4],
-                    animation_data[5],
-                    animation_data[6],
-                    animation_data[7],
-                ]);
-                let num_timesteps = u32::from_le_bytes([
-                    animation_data[8],
-                    animation_data[9],
-                    animation_data[10],
-                    animation_data[11],
-                ]) as usize;
-
-                let animation_type = match target_path {
-                    0 => AnimationType::Translation,
-                    1 => AnimationType::Rotation,
-                    2 => AnimationType::Scale,
-                    _ => {
-                        continue;
-                    }
+        
+        if let Some(animation) = gltf.animations().next() {
+            for channel in animation.channels() {
+                let target_node = channel.target().node().index() as u32;
+                let sampler = channel.sampler();
+                
+                let animation_type = match channel.target().property() {
+                    gltf::animation::Property::Translation => AnimationType::Translation,
+                    gltf::animation::Property::Rotation => AnimationType::Rotation,
+                    gltf::animation::Property::Scale => AnimationType::Scale,
+                    _ => continue,
                 };
 
-                let mut cursor = 12;
-                let mut times = Vec::new();
-                for _ in 0..num_timesteps {
-                    let time = f32::from_le_bytes([
-                        animation_data[cursor],
-                        animation_data[cursor + 1],
-                        animation_data[cursor + 2],
-                        animation_data[cursor + 3],
-                    ]);
-                    times.push(time);
-                    cursor += 4;
-                }
+                // Extract time data
+                let input_accessor = sampler.input();
+                let times: Vec<f32> = extract_buffer_data(&buffers, &input_accessor)?;
 
-                let components = match animation_type {
-                    AnimationType::Translation | AnimationType::Scale => 3,
-                    AnimationType::Rotation => 4,
-                };
-
-                let mut data = Vec::new();
-                for _ in 0..num_timesteps {
-                    for _ in 0..components {
-                        let value = f32::from_le_bytes([
-                            animation_data[cursor],
-                            animation_data[cursor + 1],
-                            animation_data[cursor + 2],
-                            animation_data[cursor + 3],
-                        ]);
-                        data.push(value);
-                        cursor += 4;
-                    }
-                }
+                // Extract animation data
+                let output_accessor = sampler.output();
+                let data: Vec<f32> = extract_buffer_data(&buffers, &output_accessor)?;
 
                 animation_channels.push(AnimationChannel {
                     target: target_node,
                     animation_type,
-                    num_timesteps,
+                    num_timesteps: times.len(),
                     times,
                     data,
                 });
             }
         }
 
-        // Load joint info
+        // Extract skin data
         println!("🔄 Loading joint and skinning data...");
-        let num_joints = u32::from_le_bytes([
-            joint_info_data[0],
-            joint_info_data[1],
-            joint_info_data[2],
-            joint_info_data[3],
-        ]) as usize;
         let mut joint_ids = Vec::new();
-        let mut cursor = 4;
-
-        for _ in 0..num_joints {
-            let joint_id = u32::from_le_bytes([
-                joint_info_data[cursor],
-                joint_info_data[cursor + 1],
-                joint_info_data[cursor + 2],
-                joint_info_data[cursor + 3],
-            ]);
-            joint_ids.push(joint_id);
-            cursor += 4;
-        }
-
         let mut joint_inverse_mats = Vec::new();
-        for _ in 0..num_joints {
-            let mut matrix = [0.0f32; 16];
-            for j in 0..16 {
-                matrix[j] = f32::from_le_bytes([
-                    joint_info_data[cursor],
-                    joint_info_data[cursor + 1],
-                    joint_info_data[cursor + 2],
-                    joint_info_data[cursor + 3],
-                ]);
-                cursor += 4;
+
+        if let Some(skin) = gltf.skins().next() {
+            // Get joint indices
+            for joint in skin.joints() {
+                joint_ids.push(joint.index() as u32);
             }
-            // Transpose like the C implementation
-            joint_inverse_mats.push(mat4x4_transpose(matrix));
+
+            // Get inverse bind matrices
+            if let Some(ibm_accessor) = skin.inverse_bind_matrices() {
+                let matrices: Vec<f32> = extract_buffer_data(&buffers, &ibm_accessor)?;
+                
+                // Convert to Mat4x4 and transpose
+                for i in 0..(matrices.len() / 16) {
+                    let start = i * 16;
+                    let mut matrix = [0.0f32; 16];
+                    matrix.copy_from_slice(&matrices[start..start + 16]);
+                    joint_inverse_mats.push(mat4x4_transpose(matrix));
+                }
+            }
         }
 
         println!(
             "✅ Model loaded: {} nodes, {} animations, {} joints",
             nodes.len(),
             animation_channels.len(),
-            num_joints
+            joint_ids.len()
         );
 
         Ok(Model {
             vao: vertex_array,
-            num_indices: indices_data.len() / 2, // u16 indices
+            num_indices: indices.len(),
             nodes,
             animation_channels,
             joint_ids,
