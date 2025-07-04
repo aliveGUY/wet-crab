@@ -2,162 +2,39 @@ use glow::HasContext;
 use web_time::Instant;
 use gltf::buffer::Data;
 
-// === MATH HELPERS (Row-major like the C implementation) ===
-
-type Mat4x4 = [f32; 16];
-
-fn mat4x4_identity() -> Mat4x4 {
-    [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+mod math {
+    include!("engine/utils/math.rs");
 }
+use math::*;
 
-fn mat4x4_translate(x: f32, y: f32, z: f32) -> Mat4x4 {
-    [1.0, 0.0, 0.0, x, 0.0, 1.0, 0.0, y, 0.0, 0.0, 1.0, z, 0.0, 0.0, 0.0, 1.0]
+// Import Object3D and components
+mod object3d {
+    include!("engine/components/Object3D.rs");
 }
-
-fn mat4x4_rot_y(angle: f32) -> Mat4x4 {
-    let c = angle.cos();
-    let s = angle.sin();
-    [c, 0.0, -s, 0.0, 0.0, 1.0, 0.0, 0.0, s, 0.0, c, 0.0, 0.0, 0.0, 0.0, 1.0]
-}
-
-fn mat4x4_scale(x: f32, y: f32, z: f32) -> Mat4x4 {
-    [x, 0.0, 0.0, 0.0, 0.0, y, 0.0, 0.0, 0.0, 0.0, z, 0.0, 0.0, 0.0, 0.0, 1.0]
-}
-
-fn mat4x4_from_quat(quat: [f32; 4]) -> Mat4x4 {
-    let [x, y, z, w] = quat;
-    let x2 = x * x;
-    let y2 = y * y;
-    let z2 = z * z;
-    let w2 = w * w;
-
-    let xy = 2.0 * x * y;
-    let xz = 2.0 * x * z;
-    let xw = 2.0 * x * w;
-    let yz = 2.0 * y * z;
-    let yw = 2.0 * y * w;
-    let zw = 2.0 * z * w;
-
-    [
-        w2 + x2 - y2 - z2,
-        xy - zw,
-        xz + yw,
-        0.0,
-        xy + zw,
-        w2 - x2 + y2 - z2,
-        yz - xw,
-        0.0,
-        xz - yw,
-        yz + xw,
-        w2 - x2 - y2 + z2,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    ]
-}
-
-fn mat4x4_transpose(matrix: Mat4x4) -> Mat4x4 {
-    let mut ret = [0.0; 16];
-    for i in 0..16 {
-        let row = i / 4;
-        let col = i % 4;
-        ret[col * 4 + row] = matrix[row * 4 + col];
-    }
-    ret
-}
-
-fn vec4_dot(a: [f32; 4], b: [f32; 4]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
-}
-
-fn mat4x4_row(mat: &Mat4x4, row: usize) -> [f32; 4] {
-    let start_idx = row * 4;
-    [mat[start_idx], mat[start_idx + 1], mat[start_idx + 2], mat[start_idx + 3]]
-}
-
-fn mat4x4_col(mat: &Mat4x4, col: usize) -> [f32; 4] {
-    [mat[col], mat[4 + col], mat[8 + col], mat[12 + col]]
-}
-
-fn mat4x4_mul(a: Mat4x4, b: Mat4x4) -> Mat4x4 {
-    let mut ret = [0.0; 16];
-    for i in 0..16 {
-        let row = i / 4;
-        let col = i % 4;
-        let a_row = mat4x4_row(&a, row);
-        let b_col = mat4x4_col(&b, col);
-        ret[i] = vec4_dot(a_row, b_col);
-    }
-    ret
-}
-
-fn mat4x4_perspective(n: f32, f: f32) -> Mat4x4 {
-    let a = -f / (f - n);
-    let b = (-f * n) / (f - n);
-    [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, a, b, 0.0, 0.0, -1.0, 0.0]
-}
+use object3d::*;
 
 // === DATA STRUCTURES ===
 
-#[derive(Debug, Clone)]
-struct Node {
-    translation: [f32; 3],
-    rotation: [f32; 4],
-    scale: [f32; 3],
-    parent: u32,
-}
-
-#[derive(Debug, Clone)]
-enum AnimationType {
-    Translation = 0,
-    Rotation = 1,
-    Scale = 2,
-}
-
-#[derive(Debug, Clone)]
-struct AnimationChannel {
-    target: u32,
-    animation_type: AnimationType,
-    num_timesteps: usize,
-    times: Vec<f32>,
-    data: Vec<f32>,
-}
-
-impl AnimationChannel {
-    fn components(&self) -> usize {
-        match self.animation_type {
-            AnimationType::Translation | AnimationType::Scale => 3,
-            AnimationType::Rotation => 4,
-        }
-    }
-}
-
 struct Model {
-    vao: glow::VertexArray,
-    num_indices: usize,
-    nodes: Vec<Node>,
-    animation_channels: Vec<AnimationChannel>,
-    joint_ids: Vec<u32>,
-    joint_inverse_mats: Vec<Mat4x4>,
+    object3d: Object3D,
+    gl_vao: glow::VertexArray, // Keep OpenGL-specific data separate
 }
 
 // === GLTF LOADING ===
 
 fn extract_buffer_data<T: bytemuck::Pod>(
     buffers: &[Data],
-    accessor: &gltf::Accessor,
+    accessor: &gltf::Accessor
 ) -> Result<Vec<T>, Box<dyn std::error::Error>> {
     let view = accessor.view().ok_or("Missing buffer view")?;
     let buffer = &buffers[view.buffer().index()];
     let start = view.offset() + accessor.offset();
     let end = start + accessor.count() * accessor.size();
-    
+
     if end > buffer.len() {
         return Err("Buffer overflow".into());
     }
-    
+
     let slice = &buffer[start..end];
     let typed_slice = bytemuck::cast_slice(slice);
     Ok(typed_slice.to_vec())
@@ -166,166 +43,173 @@ fn extract_buffer_data<T: bytemuck::Pod>(
 fn load_model(gl: &glow::Context) -> Result<Model, Box<dyn std::error::Error>> {
     println!("🔄 Loading embedded GLTF data...");
 
-    // Load embedded GLTF data
-    let gltf_json = include_str!("assets/meshes/guy.gltf");
-    let gltf_bin = include_bytes!("assets/meshes/guy.bin");
-    
-    let gltf = gltf::Gltf::from_slice(gltf_json.as_bytes())?;
-    let buffers = vec![gltf::buffer::Data(gltf_bin.to_vec())];
+    let gltf = gltf::Gltf::from_slice(include_str!("assets/meshes/guy.gltf").as_bytes())?;
+    let buffers = vec![gltf::buffer::Data(include_bytes!("assets/meshes/guy.bin").to_vec())];
 
-    // Get the first mesh (we know there's only one)
-    let mesh = gltf.meshes().next().ok_or("No mesh found")?;
-    let primitive = mesh.primitives().next().ok_or("No primitive found")?;
+    let primitive = gltf
+        .meshes()
+        .next()
+        .ok_or("No mesh found")?
+        .primitives()
+        .next()
+        .ok_or("No primitive found")?;
 
-    // Extract mesh data
-    let positions_accessor = primitive.get(&gltf::Semantic::Positions).ok_or("No positions")?;
-    let normals_accessor = primitive.get(&gltf::Semantic::Normals).ok_or("No normals")?;
-    let joints_accessor = primitive.get(&gltf::Semantic::Joints(0)).ok_or("No joints")?;
-    let weights_accessor = primitive.get(&gltf::Semantic::Weights(0)).ok_or("No weights")?;
-    let indices_accessor = primitive.indices().ok_or("No indices")?;
+    macro_rules! extract {
+        ($sem:expr, $ty:ty) => {
+            extract_buffer_data::<$ty>(&buffers, &primitive.get(&$sem).ok_or(concat!("Missing ", stringify!($sem)))?)?
+        };
+    }
 
-    let positions: Vec<f32> = extract_buffer_data(&buffers, &positions_accessor)?;
-    let normals: Vec<f32> = extract_buffer_data(&buffers, &normals_accessor)?;
-    let joints: Vec<u8> = extract_buffer_data(&buffers, &joints_accessor)?;
-    let weights: Vec<f32> = extract_buffer_data(&buffers, &weights_accessor)?;
-    let indices: Vec<u16> = extract_buffer_data(&buffers, &indices_accessor)?;
+    let positions: Vec<f32> = extract!(gltf::Semantic::Positions, f32);
+    let normals: Vec<f32> = extract!(gltf::Semantic::Normals, f32);
+    let joints: Vec<u8> = extract!(gltf::Semantic::Joints(0), u8);
+    let weights: Vec<f32> = extract!(gltf::Semantic::Weights(0), f32);
+    let indices: Vec<u16> = extract_buffer_data(
+        &buffers,
+        &primitive.indices().ok_or("No indices")?
+    )?;
 
     unsafe {
-        // Create VAO
-        let vertex_array = gl.create_vertex_array()?;
-        gl.bind_vertex_array(Some(vertex_array));
+        let vao = gl.create_vertex_array()?;
+        gl.bind_vertex_array(Some(vao));
 
-        // Position buffer (location 1)
-        let position_buffer = gl.create_buffer()?;
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(position_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&positions), glow::STATIC_DRAW);
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 12, 0);
+        let setup_attrib = |loc, data: &[u8], size, ty, stride, int| {
+            let buf = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, data, glow::STATIC_DRAW);
+            gl.enable_vertex_attrib_array(loc);
+            if int {
+                gl.vertex_attrib_pointer_i32(loc, size, ty, stride, 0);
+            } else {
+                gl.vertex_attrib_pointer_f32(loc, size, ty, false, stride, 0);
+            }
+        };
 
-        // Normal buffer (location 0)
-        let normals_buffer = gl.create_buffer()?;
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(normals_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&normals), glow::STATIC_DRAW);
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 12, 0);
+        setup_attrib(1, bytemuck::cast_slice(&positions), 3, glow::FLOAT, 12, false);
+        setup_attrib(0, bytemuck::cast_slice(&normals), 3, glow::FLOAT, 12, false);
+        setup_attrib(2, &joints, 4, glow::UNSIGNED_BYTE, 4, true);
+        setup_attrib(3, bytemuck::cast_slice(&weights), 4, glow::FLOAT, 16, false);
 
-        // Joints buffer (location 2)
-        let joints_buffer = gl.create_buffer()?;
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(joints_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &joints, glow::STATIC_DRAW);
-        gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_i32(2, 4, glow::UNSIGNED_BYTE, 4, 0);
-
-        // Weights buffer (location 3)
-        let weights_buffer = gl.create_buffer()?;
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(weights_buffer));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&weights), glow::STATIC_DRAW);
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, 16, 0);
-
-        // Index buffer
         let ebo = gl.create_buffer()?;
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
-        gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytemuck::cast_slice(&indices), glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(
+            glow::ELEMENT_ARRAY_BUFFER,
+            bytemuck::cast_slice(&indices),
+            glow::STATIC_DRAW
+        );
 
         gl.bind_vertex_array(None);
 
-        // Extract node hierarchy
-        println!("🔄 Loading node hierarchy...");
-        let mut nodes = Vec::new();
         let mut node_parents = vec![u32::MAX; gltf.nodes().len()];
-
-        // Build parent relationships
         for node in gltf.nodes() {
             for child in node.children() {
                 node_parents[child.index()] = node.index() as u32;
             }
         }
 
-        // Extract node data
-        for node in gltf.nodes() {
-            let (translation, rotation, scale) = node.transform().decomposed();
-            nodes.push(Node {
-                translation,
-                rotation,
-                scale,
-                parent: node_parents[node.index()],
-            });
-        }
+        let nodes = gltf
+            .nodes()
+            .map(|n| {
+                let (t, r, s) = n.transform().decomposed();
+                Node { translation: t, rotation: r, scale: s, parent: node_parents[n.index()] }
+            })
+            .collect::<Vec<_>>();
 
-        // Extract animations
-        println!("🔄 Loading animation data...");
-        let mut animation_channels = Vec::new();
+        let animation_channels: Vec<AnimationChannel> = gltf
+            .animations()
+            .next()
+            .map(|anim| {
+                anim.channels()
+                    .filter_map(|chan| {
+                        let anim_type = match chan.target().property() {
+                            gltf::animation::Property::Translation => AnimationType::Translation,
+                            gltf::animation::Property::Rotation => AnimationType::Rotation,
+                            gltf::animation::Property::Scale => AnimationType::Scale,
+                            _ => {
+                                return None;
+                            }
+                        };
+
+                        let times = extract_buffer_data::<f32>(
+                            &buffers,
+                            &chan.sampler().input()
+                        ).ok()?;
+                        let data = extract_buffer_data::<f32>(
+                            &buffers,
+                            &chan.sampler().output()
+                        ).ok()?;
+
+                        Some(AnimationChannel {
+                            target: chan.target().node().index() as u32,
+                            animation_type: anim_type,
+                            num_timesteps: times.len(),
+                            times,
+                            data,
+                        })
+                    })
+                    .collect::<Vec<AnimationChannel>>()
+            })
+            .unwrap_or_default();
+
+        let (joint_ids, joint_inverse_mats) = if let Some(skin) = gltf.skins().next() {
+            let ids = skin
+                .joints()
+                .map(|j| j.index() as u32)
+                .collect();
+            let mut inv_mats = Vec::new();
+            if let Some(ibm) = skin.inverse_bind_matrices() {
+                let data: Vec<f32> = extract_buffer_data(&buffers, &ibm)?;
+                inv_mats = data
+                    .chunks(16)
+                    .map(|m| {
+                        let mut mat = [0.0; 16];
+                        mat.copy_from_slice(m);
+                        mat4x4_transpose(mat)
+                    })
+                    .collect();
+            }
+            (ids, inv_mats)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
+        // Create Object3D components
+        let mesh_component = Mesh::with_buffers(
+            0, // For WebGL, we'll use 0 as placeholder since VAO is handled separately
+            0, // We don't track individual buffers in this simple case
+            0,
+            indices.len(),
+            positions.len() / 3
+        );
+
+        let skeleton = if !nodes.is_empty() {
+            Some(Skeleton {
+                nodes,
+                joint_ids,
+                joint_inverse_mats,
+            })
+        } else {
+            None
+        };
+
+        let mut object3d = Object3D::with_mesh(mesh_component);
         
-        if let Some(animation) = gltf.animations().next() {
-            for channel in animation.channels() {
-                let target_node = channel.target().node().index() as u32;
-                let sampler = channel.sampler();
-                
-                let animation_type = match channel.target().property() {
-                    gltf::animation::Property::Translation => AnimationType::Translation,
-                    gltf::animation::Property::Rotation => AnimationType::Rotation,
-                    gltf::animation::Property::Scale => AnimationType::Scale,
-                    _ => continue,
-                };
-
-                // Extract time data
-                let input_accessor = sampler.input();
-                let times: Vec<f32> = extract_buffer_data(&buffers, &input_accessor)?;
-
-                // Extract animation data
-                let output_accessor = sampler.output();
-                let data: Vec<f32> = extract_buffer_data(&buffers, &output_accessor)?;
-
-                animation_channels.push(AnimationChannel {
-                    target: target_node,
-                    animation_type,
-                    num_timesteps: times.len(),
-                    times,
-                    data,
-                });
-            }
+        if let Some(skel) = skeleton {
+            object3d.set_skeleton(skel);
         }
-
-        // Extract skin data
-        println!("🔄 Loading joint and skinning data...");
-        let mut joint_ids = Vec::new();
-        let mut joint_inverse_mats = Vec::new();
-
-        if let Some(skin) = gltf.skins().next() {
-            // Get joint indices
-            for joint in skin.joints() {
-                joint_ids.push(joint.index() as u32);
-            }
-
-            // Get inverse bind matrices
-            if let Some(ibm_accessor) = skin.inverse_bind_matrices() {
-                let matrices: Vec<f32> = extract_buffer_data(&buffers, &ibm_accessor)?;
-                
-                // Convert to Mat4x4 and transpose
-                for i in 0..(matrices.len() / 16) {
-                    let start = i * 16;
-                    let mut matrix = [0.0f32; 16];
-                    matrix.copy_from_slice(&matrices[start..start + 16]);
-                    joint_inverse_mats.push(mat4x4_transpose(matrix));
-                }
-            }
-        }
+        
+        object3d.set_animation_channels(animation_channels);
 
         println!(
             "✅ Model loaded: {} nodes, {} animations, {} joints",
-            nodes.len(),
-            animation_channels.len(),
-            joint_ids.len()
+            object3d.skeleton.as_ref().map_or(0, |s| s.nodes.len()),
+            object3d.animation_channels.len(),
+            object3d.skeleton.as_ref().map_or(0, |s| s.joint_ids.len())
         );
 
         Ok(Model {
-            vao: vertex_array,
-            num_indices: indices.len(),
-            nodes,
-            animation_channels,
-            joint_ids,
-            joint_inverse_mats,
+            object3d,
+            gl_vao: vao,
         })
     }
 }
@@ -337,7 +221,7 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 fn apply_animation(time_since_start: f32, model: &mut Model) {
-    for channel in &model.animation_channels {
+    for channel in &model.object3d.animation_channels {
         if channel.times.is_empty() {
             continue;
         }
@@ -375,23 +259,25 @@ fn apply_animation(time_since_start: f32, model: &mut Model) {
             out[i] = lerp(last_data[i], next_data[i], t);
         }
 
-        if let Some(node) = model.nodes.get_mut(channel.target as usize) {
-            match channel.animation_type {
-                AnimationType::Translation => {
-                    node.translation[0] = out[0];
-                    node.translation[1] = out[1];
-                    node.translation[2] = out[2];
-                }
-                AnimationType::Rotation => {
-                    node.rotation[0] = out[0];
-                    node.rotation[1] = out[1];
-                    node.rotation[2] = out[2];
-                    node.rotation[3] = out[3];
-                }
-                AnimationType::Scale => {
-                    node.scale[0] = out[0];
-                    node.scale[1] = out[1];
-                    node.scale[2] = out[2];
+        if let Some(skeleton) = &mut model.object3d.skeleton {
+            if let Some(node) = skeleton.nodes.get_mut(channel.target as usize) {
+                match channel.animation_type {
+                    AnimationType::Translation => {
+                        node.translation[0] = out[0];
+                        node.translation[1] = out[1];
+                        node.translation[2] = out[2];
+                    }
+                    AnimationType::Rotation => {
+                        node.rotation[0] = out[0];
+                        node.rotation[1] = out[1];
+                        node.rotation[2] = out[2];
+                        node.rotation[3] = out[3];
+                    }
+                    AnimationType::Scale => {
+                        node.scale[0] = out[0];
+                        node.scale[1] = out[1];
+                        node.scale[2] = out[2];
+                    }
                 }
             }
         }
@@ -500,7 +386,7 @@ impl Program {
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
             self.gl.use_program(Some(self.shader_program));
-            self.gl.bind_vertex_array(Some(self.model.vao));
+            self.gl.bind_vertex_array(Some(self.model.gl_vao));
 
             let angle = time_since_start * 0.5;
             let mut world_txfm = mat4x4_translate(0.0, 0.0, 0.0);
@@ -513,12 +399,14 @@ impl Program {
             let mut bone_matrices = vec![mat4x4_identity(); 20];
             let mut inverse_bone_matrices = vec![mat4x4_identity(); 20];
 
-            for (i, &joint_id) in self.model.joint_ids.iter().enumerate() {
-                if i >= 20 {
-                    break;
+            if let Some(skeleton) = &self.model.object3d.skeleton {
+                for (i, &joint_id) in skeleton.joint_ids.iter().enumerate() {
+                    if i >= 20 {
+                        break;
+                    }
+                    inverse_bone_matrices[i] = skeleton.joint_inverse_mats[i];
+                    bone_matrices[i] = node_world_txfm(&skeleton.nodes, joint_id as usize);
                 }
-                inverse_bone_matrices[i] = self.model.joint_inverse_mats[i];
-                bone_matrices[i] = node_world_txfm(&self.model.nodes, joint_id as usize);
             }
 
             // Upload uniforms
@@ -552,7 +440,7 @@ impl Program {
             // Render
             self.gl.draw_elements(
                 glow::TRIANGLES,
-                self.model.num_indices as i32,
+                self.model.object3d.mesh.num_indices as i32,
                 glow::UNSIGNED_SHORT,
                 0
             );
@@ -564,7 +452,7 @@ impl Program {
     pub fn cleanup(&self) {
         unsafe {
             self.gl.delete_program(self.shader_program);
-            self.gl.delete_vertex_array(self.model.vao);
+            self.gl.delete_vertex_array(self.model.gl_vao);
         }
     }
 }

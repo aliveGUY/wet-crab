@@ -1,0 +1,108 @@
+pub type Mat4x4 = [f32; 16];
+
+pub fn mat4x4_identity() -> Mat4x4 {
+    [
+      1.0, 0.0, 0.0, 0.0, 
+      0.0, 1.0, 0.0, 0.0, 
+      0.0, 0.0, 1.0, 0.0, 
+      0.0, 0.0, 0.0, 1.0
+    ]
+}
+
+pub fn mat4x4_translate(x: f32, y: f32, z: f32) -> Mat4x4 {
+    [
+      1.0, 0.0, 0.0,  x, 
+      0.0, 1.0, 0.0,  y,
+      0.0, 0.0, 1.0,  z, 
+      0.0, 0.0, 0.0, 1.0
+    ]
+}
+
+pub fn mat4x4_rot_y(angle: f32) -> Mat4x4 {
+    let c = angle.cos();
+    let s = angle.sin();
+
+    [
+       c,  0.0, -s,  0.0, 
+      0.0, 1.0, 0.0, 0.0, 
+       s,  0.0,  c,  0.0, 
+      0.0, 0.0, 0.0, 1.0
+    ]
+}
+
+pub fn mat4x4_scale(x: f32, y: f32, z: f32) -> Mat4x4 {
+    [
+       x,  0.0, 0.0, 0.0, 
+      0.0,  y,  0.0, 0.0, 
+      0.0, 0.0,  z,  0.0, 
+      0.0, 0.0, 0.0, 1.0
+    ]
+}
+
+pub fn mat4x4_from_quat(quat: [f32; 4]) -> Mat4x4 {
+    let [x, y, z, w] = quat;
+    let x2 = x * x;
+    let y2 = y * y;
+    let z2 = z * z;
+    let w2 = w * w;
+
+    let xy = 2.0 * x * y;
+    let xz = 2.0 * x * z;
+    let xw = 2.0 * x * w;
+    let yz = 2.0 * y * z;
+    let yw = 2.0 * y * w;
+    let zw = 2.0 * z * w;
+
+    [
+        w2 + x2 - y2 - z2,  xy - zw,            xz + yw,            0.0,
+        xy + zw,            w2 - x2 + y2 - z2,  yz - xw,            0.0,
+        xz - yw,            yz + xw,            w2 - x2 - y2 + z2,  0.0,
+        0.0,                0.0,                0.0,                1.0,
+    ]
+}
+
+pub fn mat4x4_transpose(matrix: Mat4x4) -> Mat4x4 {
+    let mut ret = [0.0; 16];
+    for i in 0..16 {
+        let row = i / 4;
+        let col = i % 4;
+        ret[col * 4 + row] = matrix[row * 4 + col];
+    }
+    ret
+}
+
+pub fn vec4_dot(a: [f32; 4], b: [f32; 4]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
+}
+
+pub fn mat4x4_row(mat: &Mat4x4, row: usize) -> [f32; 4] {
+    let start_idx = row * 4;
+    [mat[start_idx], mat[start_idx + 1], mat[start_idx + 2], mat[start_idx + 3]]
+}
+
+pub fn mat4x4_col(mat: &Mat4x4, col: usize) -> [f32; 4] {
+    [mat[col], mat[4 + col], mat[8 + col], mat[12 + col]]
+}
+
+pub fn mat4x4_mul(a: Mat4x4, b: Mat4x4) -> Mat4x4 {
+    let mut ret = [0.0; 16];
+    for i in 0..16 {
+        let row = i / 4;
+        let col = i % 4;
+        let a_row = mat4x4_row(&a, row);
+        let b_col = mat4x4_col(&b, col);
+        ret[i] = vec4_dot(a_row, b_col);
+    }
+    ret
+}
+
+pub fn mat4x4_perspective(n: f32, f: f32) -> Mat4x4 {
+    let a = -f / (f - n);
+    let b = (-f * n) / (f - n);
+    [
+      1.0, 0.0, 0.0, 0.0, 
+      0.0, 1.0, 0.0, 0.0, 
+      0.0, 0.0,  a,   b, 
+      0.0, 0.0, -1.0, 0.0
+    ]
+}
