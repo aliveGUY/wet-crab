@@ -23,65 +23,89 @@ impl AssetsManager {
         }
     }
 
-    fn initialize(&mut self, gl: &glow::Context) -> Result<(), Box<dyn std::error::Error>> {
+    fn initialize(&mut self, gl: &glow::Context) {
         if self.initialized {
             println!("⚠️  AssetsManager already initialized");
-            return Ok(());
+            return;
         }
 
         println!("🔄 Initializing AssetsManager and loading all assets...");
-        
-        // Load TestingDoll asset once
+
         self.load_gltf(
-            "../../assets/meshes/guy.gltf",
-            "../../assets/meshes/guy.bin", 
-            "../../assets/textures/Material Base Color.png",
+            include_str!("../../assets/meshes/guy.gltf"),
+            include_bytes!("../../assets/meshes/guy.bin"),
+            include_bytes!("../../assets/textures/Material Base Color.png"),
             Assets::TestingDoll,
             gl
-        )?;
-        
+        );
+
         self.initialized = true;
         println!("✅ AssetsManager initialization complete. Loaded {} assets.", self.assets.len());
-        Ok(())
     }
 
-    fn get_object3d_copy(&self, asset_name: Assets) -> Option<Object3D> {
+    fn get_object3d_copy(&self, asset_name: Assets) -> Object3D {
         if !self.initialized {
-            eprintln!("❌ AssetsManager not initialized! Call initialize() first.");
-            return None;
+            eprintln!(
+                "❌ AssetsManager not initialized! Call initialize() first. Using default Object3D."
+            );
+            return Object3D::new();
         }
 
         // Simply get copy from map - no file access, no GL context needed
         if let Some(object3d) = self.assets.get(&asset_name) {
             println!("✅ Retrieved copy of asset: {:?} from cache", asset_name);
-            Some(object3d.clone())
+            object3d.clone()
         } else {
-            eprintln!("❌ Asset {:?} not found in cache", asset_name);
-            None
+            eprintln!("❌ Asset {:?} not found in cache, using default Object3D", asset_name);
+            Object3D::new()
         }
     }
 
     fn load_gltf(
         &mut self,
-        gltf_path: &str,
-        bin_path: &str,
-        texture_path: &str,
+        gltf_data: &str,
+        bin_data: &[u8],
+        png_data: &[u8],
         asset_name: Assets,
         gl: &glow::Context
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        println!("🔄 Loading GLTF from paths: {}, {}, {}", gltf_path, bin_path, texture_path);
-        
-        // Load and parse asset files ONCE during initialization
-        let gltf_data = include_str!("../../assets/meshes/guy.gltf");
-        let gltf = gltf::Gltf::from_slice(gltf_data.as_bytes())?;
-        let bin_data = include_bytes!("../../assets/meshes/guy.bin");
+    ) {
+        println!("🔄 Loading GLTF asset: {:?}", asset_name);
+
+        // Parse asset data ONCE during initialization
+        let gltf = match gltf::Gltf::from_slice(gltf_data.as_bytes()) {
+            Ok(gltf) => gltf,
+            Err(e) => {
+                eprintln!("⚠️  Failed to parse GLTF for {:?}: {}", asset_name, e);
+                return;
+            }
+        };
         let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
-        let png_data = include_bytes!("../../assets/textures/Material Base Color.png");
 
         // Create Object3D with GPU resources
-        let mesh = extract_mesh(gl, &gltf, &buffers)?;
-        let material = extract_material(gl, &gltf, &buffers, png_data)?;
-        let skeleton = extract_skeleton(&gltf, &buffers)?;
+        let mesh = match extract_mesh(gl, &gltf, &buffers) {
+            Ok(mesh) => mesh,
+            Err(e) => {
+                eprintln!("⚠️  Failed to extract mesh for {:?}: {}", asset_name, e);
+                return;
+            }
+        };
+
+        let material = match extract_material(gl, &gltf, &buffers, png_data) {
+            Ok(material) => material,
+            Err(e) => {
+                eprintln!("⚠️  Failed to extract material for {:?}: {}", asset_name, e);
+                return;
+            }
+        };
+
+        let skeleton = match extract_skeleton(&gltf, &buffers) {
+            Ok(skeleton) => skeleton,
+            Err(e) => {
+                eprintln!("⚠️  Failed to extract skeleton for {:?}: {}", asset_name, e);
+                return;
+            }
+        };
+
         let animation_channels = extract_animation_channels(&gltf, &buffers);
 
         let mut object3d = Object3D::with_mesh(mesh);
@@ -99,7 +123,6 @@ impl AssetsManager {
         // Store complete Object3D in map
         self.assets.insert(asset_name, object3d);
         println!("✅ Loaded and cached asset: {:?}", asset_name);
-        Ok(())
     }
 }
 
@@ -109,10 +132,10 @@ static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {
 });
 
 // Public API - Only two methods as requested
-pub fn initialize(gl: &glow::Context) -> Result<(), Box<dyn std::error::Error>> {
+pub fn initialize(gl: &glow::Context) {
     ASSETS_MANAGER.lock().unwrap().initialize(gl)
 }
 
-pub fn get_object3d_copy(asset_name: Assets) -> Option<Object3D> {
+pub fn get_object3d_copy(asset_name: Assets) -> Object3D {
     ASSETS_MANAGER.lock().unwrap().get_object3d_copy(asset_name)
 }

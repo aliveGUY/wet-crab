@@ -108,3 +108,26 @@ pub fn mat4x4_perspective(fov_y_radians: f32, aspect_ratio: f32, near: f32, far:
         0.0,              0.0, -1.0,                         0.0,
     ]
 }
+
+// Linear interpolation utility function
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a * (1.0 - t) + b * t
+}
+
+// Calculate world transform for a node in a skeleton hierarchy
+pub fn node_world_txfm(nodes: &[crate::index::object3d::Node], idx: usize) -> Mat4x4 {
+    let node = &nodes[idx];
+
+    let mut node_txfm = mat4x4_scale(node.scale[0], node.scale[1], node.scale[2]);
+    node_txfm = mat4x4_mul(mat4x4_from_quat(node.rotation), node_txfm);
+    node_txfm = mat4x4_mul(
+        mat4x4_translate(node.translation[0], node.translation[1], node.translation[2]),
+        node_txfm
+    );
+
+    if node.parent != u32::MAX {
+        node_txfm = mat4x4_mul(node_world_txfm(nodes, node.parent as usize), node_txfm);
+    }
+
+    node_txfm
+}

@@ -36,6 +36,15 @@ impl Material {
         self.base_color_texture.is_some()
     }
 
+    pub fn bind(&self, gl: &glow::Context) {
+        if let Some(texture) = self.base_color_texture {
+            unsafe {
+                gl.active_texture(glow::TEXTURE0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            }
+        }
+    }
+
     #[allow(dead_code)]
     pub fn cleanup(&self, gl: &glow::Context) {
         if let Some(texture) = self.base_color_texture {
