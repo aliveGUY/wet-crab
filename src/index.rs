@@ -138,13 +138,15 @@ fn compile_shader(
 pub struct Program {
     gl: glow::Context,
     shader_program: glow::Program,
-    object3d: Object3D,
+    object3d1: Object3D,  // Y-axis rotation character
+    object3d2: Object3D,  // X-axis rotation character
     start_time: Instant,
 }
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
-        let object3d = load_model(&gl).map_err(|e| format!("Failed to load model: {}", e))?;
+        let object3d1 = load_model(&gl).map_err(|e| format!("Failed to load model 1: {}", e))?;
+        let object3d2 = load_model(&gl).map_err(|e| format!("Failed to load model 2: {}", e))?;
 
         unsafe {
             let vs_src = include_str!("assets/shaders/vertex.glsl");
@@ -171,7 +173,8 @@ impl Program {
             Ok(Self {
                 gl,
                 shader_program: program,
-                object3d,
+                object3d1,
+                object3d2,
                 start_time: Instant::now(),
             })
         }
@@ -180,98 +183,145 @@ impl Program {
     pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
         let time_since_start = self.start_time.elapsed().as_secs_f32();
 
-        // Apply animation
-        apply_animation(time_since_start, &mut self.object3d);
+        // Apply animation to both characters
+        apply_animation(time_since_start, &mut self.object3d1);
+        apply_animation(time_since_start, &mut self.object3d2);
 
         unsafe {
             self.gl.viewport(0, 0, width as i32, height as i32);
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
             self.gl.use_program(Some(self.shader_program));
-            self.gl.bind_vertex_array(Some(self.object3d.mesh.vao));
-
-            // Update the model's rotation and position using its Transform component
-            let angle = time_since_start * 0.5;
-            self.object3d.transform.set_rotation_y(angle);
-            self.object3d.transform.set_translation(0.0, -3.0, -5.0);
-
-            // Get the world transform from the Object3D
-            let world_txfm = self.object3d.get_transform_matrix();
 
             let fov = (90.0_f32).to_radians();
             let aspect_ratio = (width as f32) / (height as f32);
             let viewport_txfm = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
 
-            // Calculate bone matrices
-            let mut bone_matrices = vec![mat4x4_identity(); 20];
-            let mut inverse_bone_matrices = vec![mat4x4_identity(); 20];
-
-            if let Some(skeleton) = &self.object3d.skeleton {
-                for (i, &joint_id) in skeleton.joint_ids.iter().enumerate() {
-                    if i >= 20 {
-                        break;
-                    }
-                    inverse_bone_matrices[i] = skeleton.joint_inverse_mats[i];
-                    bone_matrices[i] = node_world_txfm(&skeleton.nodes, joint_id as usize);
-                }
-            }
-
-            // Bind texture if available
-            let has_texture = if let Some(material) = &self.object3d.material {
-                if let Some(texture) = material.base_color_texture {
-                    self.gl.active_texture(glow::TEXTURE0);
-                    self.gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            // Upload uniforms
-            self.gl.uniform_matrix_4_f32_slice(
-                Some(&self.gl.get_uniform_location(self.shader_program, "world_txfm").unwrap()),
-                true,
-                &world_txfm
-            );
+            // Upload viewport transform (shared by both objects)
             self.gl.uniform_matrix_4_f32_slice(
                 Some(&self.gl.get_uniform_location(self.shader_program, "viewport_txfm").unwrap()),
                 true,
                 &viewport_txfm
             );
 
-            // Upload texture uniforms
+            // Upload texture uniforms (shared by both objects)
             if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "baseColorTexture") {
                 self.gl.uniform_1_i32(Some(&loc), 0); // Texture unit 0
             }
             if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "hasTexture") {
-                self.gl.uniform_1_i32(Some(&loc), if has_texture { 1 } else { 0 });
+                self.gl.uniform_1_i32(Some(&loc), 1); // Both objects have textures
             }
 
-            // Upload bone matrices
-            let flat_inverse: Vec<f32> = inverse_bone_matrices.iter().flatten().copied().collect();
-            let flat_bones: Vec<f32> = bone_matrices.iter().flatten().copied().collect();
+            let angle = time_since_start * 0.5;
 
-            if
-                let Some(loc) = self.gl.get_uniform_location(
-                    self.shader_program,
-                    "inverse_bone_matrix"
-                )
+            // === RENDER CHARACTER 1 (Y-axis rotation) ===
             {
-                self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_inverse);
-            }
-            if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "bone_matrix") {
-                self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_bones);
+                self.object3d1.transform.set_rotation_y(angle);
+                self.object3d1.transform.set_translation(-2.0, -3.0, -5.0);
+                
+                let world_txfm = self.object3d1.get_transform_matrix();
+                self.gl.bind_vertex_array(Some(self.object3d1.mesh.vao));
+
+                // Calculate bone matrices for character 1
+                let mut bone_matrices = vec![mat4x4_identity(); 20];
+                let mut inverse_bone_matrices = vec![mat4x4_identity(); 20];
+
+                if let Some(skeleton) = &self.object3d1.skeleton {
+                    for (i, &joint_id) in skeleton.joint_ids.iter().enumerate() {
+                        if i >= 20 { break; }
+                        inverse_bone_matrices[i] = skeleton.joint_inverse_mats[i];
+                        bone_matrices[i] = node_world_txfm(&skeleton.nodes, joint_id as usize);
+                    }
+                }
+
+                // Bind texture for character 1
+                if let Some(material) = &self.object3d1.material {
+                    if let Some(texture) = material.base_color_texture {
+                        self.gl.active_texture(glow::TEXTURE0);
+                        self.gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    }
+                }
+
+                // Upload uniforms for character 1
+                self.gl.uniform_matrix_4_f32_slice(
+                    Some(&self.gl.get_uniform_location(self.shader_program, "world_txfm").unwrap()),
+                    true,
+                    &world_txfm
+                );
+
+                let flat_inverse: Vec<f32> = inverse_bone_matrices.iter().flatten().copied().collect();
+                let flat_bones: Vec<f32> = bone_matrices.iter().flatten().copied().collect();
+
+                if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "inverse_bone_matrix") {
+                    self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_inverse);
+                }
+                if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "bone_matrix") {
+                    self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_bones);
+                }
+
+                // Render character 1
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.object3d1.mesh.index_count as i32,
+                    glow::UNSIGNED_SHORT,
+                    0
+                );
             }
 
-            // Render
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.object3d.mesh.index_count as i32,
-                glow::UNSIGNED_SHORT,
-                0
-            );
+            // === RENDER CHARACTER 2 (X-axis rotation) ===
+            {
+                self.object3d2.transform.set_rotation_x(angle);
+                self.object3d2.transform.set_translation(2.0, -3.0, -5.0);
+                
+                let world_txfm = self.object3d2.get_transform_matrix();
+                self.gl.bind_vertex_array(Some(self.object3d2.mesh.vao));
+
+                // Calculate bone matrices for character 2
+                let mut bone_matrices = vec![mat4x4_identity(); 20];
+                let mut inverse_bone_matrices = vec![mat4x4_identity(); 20];
+
+                if let Some(skeleton) = &self.object3d2.skeleton {
+                    for (i, &joint_id) in skeleton.joint_ids.iter().enumerate() {
+                        if i >= 20 { break; }
+                        inverse_bone_matrices[i] = skeleton.joint_inverse_mats[i];
+                        bone_matrices[i] = node_world_txfm(&skeleton.nodes, joint_id as usize);
+                    }
+                }
+
+                // Bind texture for character 2
+                if let Some(material) = &self.object3d2.material {
+                    if let Some(texture) = material.base_color_texture {
+                        self.gl.active_texture(glow::TEXTURE0);
+                        self.gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    }
+                }
+
+                // Upload uniforms for character 2
+                self.gl.uniform_matrix_4_f32_slice(
+                    Some(&self.gl.get_uniform_location(self.shader_program, "world_txfm").unwrap()),
+                    true,
+                    &world_txfm
+                );
+
+                let flat_inverse: Vec<f32> = inverse_bone_matrices.iter().flatten().copied().collect();
+                let flat_bones: Vec<f32> = bone_matrices.iter().flatten().copied().collect();
+
+                if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "inverse_bone_matrix") {
+                    self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_inverse);
+                }
+                if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "bone_matrix") {
+                    self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_bones);
+                }
+
+                // Render character 2
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.object3d2.mesh.index_count as i32,
+                    glow::UNSIGNED_SHORT,
+                    0
+                );
+            }
+
             self.gl.bind_vertex_array(None);
         }
         Ok(())
@@ -280,7 +330,8 @@ impl Program {
     pub fn cleanup(&self) {
         unsafe {
             self.gl.delete_program(self.shader_program);
-            self.gl.delete_vertex_array(self.object3d.mesh.vao);
+            self.gl.delete_vertex_array(self.object3d1.mesh.vao);
+            self.gl.delete_vertex_array(self.object3d2.mesh.vao);
         }
     }
 }

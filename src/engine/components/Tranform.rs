@@ -59,6 +59,15 @@ impl Transform {
         self.dirty = true;
     }
 
+    pub fn set_rotation_x(&mut self, angle_radians: f32) {
+        // Create quaternion for X-axis rotation
+        let half_angle = angle_radians * 0.5;
+        let sin_half = half_angle.sin();
+        let cos_half = half_angle.cos();
+        self.rotation = [sin_half, 0.0, 0.0, cos_half]; // [x, y, z, w]
+        self.dirty = true;
+    }
+
     pub fn get_matrix(&mut self) -> [f32; 16] {
         if self.dirty || self.transform_matrix.is_none() {
             self.calculate_matrix();
