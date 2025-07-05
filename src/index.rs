@@ -216,6 +216,19 @@ impl Program {
                 }
             }
 
+            // Bind texture if available
+            let has_texture = if let Some(material) = &self.object3d.material {
+                if let Some(texture) = material.base_color_texture {
+                    self.gl.active_texture(glow::TEXTURE0);
+                    self.gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
             // Upload uniforms
             self.gl.uniform_matrix_4_f32_slice(
                 Some(&self.gl.get_uniform_location(self.shader_program, "world_txfm").unwrap()),
@@ -227,6 +240,14 @@ impl Program {
                 true,
                 &viewport_txfm
             );
+
+            // Upload texture uniforms
+            if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "baseColorTexture") {
+                self.gl.uniform_1_i32(Some(&loc), 0); // Texture unit 0
+            }
+            if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "hasTexture") {
+                self.gl.uniform_1_i32(Some(&loc), if has_texture { 1 } else { 0 });
+            }
 
             // Upload bone matrices
             let flat_inverse: Vec<f32> = inverse_bone_matrices.iter().flatten().copied().collect();

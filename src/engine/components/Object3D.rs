@@ -5,6 +5,9 @@ mod transform_mod {
 mod mesh_mod {
     include!("Mesh.rs");
 }
+mod material_mod {
+    include!("Material.rs");
+}
 mod skeleton_mod {
     include!("Skeleton.rs");
 }
@@ -14,13 +17,14 @@ mod animation_mod {
 
 pub use transform_mod::Transform;
 pub use mesh_mod::Mesh;
+pub use material_mod::Material;
 pub use skeleton_mod::*;
 pub use animation_mod::*;
 
-// Main Object3D struct
 pub struct Object3D {
     pub transform: Transform,
     pub mesh: Mesh,
+    pub material: Option<Material>,
     pub skeleton: Option<Skeleton>,
     pub animation_channels: Vec<AnimationChannel>,
 }
@@ -30,6 +34,7 @@ impl Object3D {
         Self {
             transform: Transform::new(),
             mesh: Mesh::new(),
+            material: None,
             skeleton: None,
             animation_channels: Vec::new(),
         }
@@ -39,6 +44,7 @@ impl Object3D {
         Self {
             transform: Transform::new(),
             mesh,
+            material: None,
             skeleton: None,
             animation_channels: Vec::new(),
         }
@@ -48,9 +54,18 @@ impl Object3D {
         Self {
             transform,
             mesh,
+            material: None,
             skeleton: None,
             animation_channels: Vec::new(),
         }
+    }
+
+    pub fn set_material(&mut self, material: Material) {
+        self.material = Some(material);
+    }
+
+    pub fn has_material(&self) -> bool {
+        self.material.is_some()
     }
 
     pub fn set_skeleton(&mut self, skeleton: Skeleton) {

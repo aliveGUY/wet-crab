@@ -13,10 +13,15 @@ pub fn load_model(gl: &glow::Context) -> Result<Object3D, Box<dyn std::error::Er
     let buffers = vec![gltf::buffer::Data(include_bytes!("../../assets/meshes/guy.bin").to_vec())];
 
     let mesh = extract_mesh(gl, &gltf, &buffers)?;
+    let material = extract_material(gl, &gltf, &buffers)?;
     let skeleton = extract_skeleton(&gltf, &buffers)?;
     let animation_channels = extract_animation_channels(&gltf, &buffers);
 
     let mut object3d = Object3D::with_mesh(mesh);
+
+    if let Some(mat) = material {
+        object3d.set_material(mat);
+    }
 
     if let Some(skel) = skeleton {
         object3d.set_skeleton(skel);
@@ -25,10 +30,11 @@ pub fn load_model(gl: &glow::Context) -> Result<Object3D, Box<dyn std::error::Er
     object3d.set_animation_channels(animation_channels);
 
     println!(
-        "✅ Model loaded: {} nodes, {} animations, {} joints",
+        "✅ Model loaded: {} nodes, {} animations, {} joints, texture: {}",
         object3d.skeleton.as_ref().map_or(0, |s| s.nodes.len()),
         object3d.animation_channels.len(),
-        object3d.skeleton.as_ref().map_or(0, |s| s.joint_ids.len())
+        object3d.skeleton.as_ref().map_or(0, |s| s.joint_ids.len()),
+        object3d.has_material()
     );
 
     Ok(object3d)
