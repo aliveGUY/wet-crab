@@ -6,6 +6,7 @@ pub struct Node {
     pub parent: u32,
 }
 
+#[derive(Debug, Clone)]
 pub struct Skeleton {
     pub nodes: Vec<Node>,
     pub joint_ids: Vec<u32>,

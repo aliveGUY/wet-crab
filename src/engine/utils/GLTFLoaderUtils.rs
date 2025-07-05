@@ -1,3 +1,5 @@
+use gltf::buffer::Data;
+
 pub fn extract_mesh(
     gl: &glow::Context,
     gltf: &gltf::Gltf,
@@ -201,7 +203,8 @@ fn decode_png_with_crate(png_data: &[u8]) -> Result<(u32, u32, Vec<u8>), Box<dyn
 pub fn extract_material(
     gl: &glow::Context,
     gltf: &gltf::Gltf,
-    _buffers: &[Data]
+    _buffers: &[Data],
+    png_data: &[u8]
 ) -> Result<Option<Material>, Box<dyn std::error::Error>> {
     if let Some(material) = gltf.materials().next() {
         let pbr = material.pbr_metallic_roughness();
@@ -218,8 +221,6 @@ pub fn extract_material(
             let texture_index = base_color_info.texture().index();
             if let Some(texture) = gltf.textures().nth(texture_index) {
                 if let Some(_image) = gltf.images().nth(texture.source().index()) {
-                    // Load the actual PNG texture
-                    let png_data = include_bytes!("../../assets/meshes/Material Base Color.png");
                     
                     match decode_png_with_crate(png_data) {
                         Ok((width, height, rgba_pixels)) => {

@@ -1,4 +1,5 @@
 // Transform component for 3D objects
+#[derive(Clone)]
 pub struct Transform {
     pub translation: [f32; 3],
     pub rotation: [f32; 4], // quaternion

@@ -8,6 +8,19 @@ use std::cell::RefCell;
 mod index;
 use index::Program;
 
+// Platform-specific shader source functions for Web/WASM
+#[no_mangle]
+pub fn get_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex.glsl");
+    source.replace("#VERSION", "#version 300 es\nprecision mediump float;")
+}
+
+#[no_mangle]
+pub fn get_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment.glsl");
+    source.replace("#VERSION", "#version 300 es\nprecision mediump float;")
+}
+
 struct RenderState {
     program: Program,
     canvas: HtmlCanvasElement,

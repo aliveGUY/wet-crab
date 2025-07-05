@@ -16,6 +16,19 @@ use winit::window::{ Window, WindowId };
 mod index;
 use index::Program;
 
+// Platform-specific shader source functions for Linux/Native
+#[no_mangle]
+pub fn get_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
+#[no_mangle]
+pub fn get_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
 struct App {
     window: Option<Window>,
     gl_context: Option<glutin::context::PossiblyCurrentContext>,

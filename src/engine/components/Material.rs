@@ -1,6 +1,6 @@
 use glow::HasContext;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Material {
     pub base_color_texture: Option<glow::Texture>,
     pub metallic_factor: f32,

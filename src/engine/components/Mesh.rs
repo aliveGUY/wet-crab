@@ -1,4 +1,5 @@
 // Mesh component for 3D objects
+#[derive(Clone)]
 pub struct Mesh {
     pub vao: glow::VertexArray,
     pub index_count: usize,

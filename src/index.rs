@@ -1,5 +1,4 @@
 use glow::HasContext;
-use web_time::Instant;
 
 mod math {
     include!("engine/utils/math.rs");
@@ -11,12 +10,17 @@ mod object3d {
 }
 use object3d::*;
 
-mod gltf_loader {
+mod gltf_loader_utils {
     use super::*;
-    include!("engine/loaders/GLTFLoader.rs");
+    include!("engine/utils/GLTFLoaderUtils.rs");
 }
 
-use gltf_loader::load_model;
+mod assets_manager {
+    use super::*;
+    include!("engine/managers/AssetsManager.rs");
+}
+
+use assets_manager::{ initialize, getObject3DCopy, Assets };
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a * (1.0 - t) + b * t
@@ -105,21 +109,15 @@ fn node_world_txfm(nodes: &[Node], idx: usize) -> Mat4x4 {
     node_txfm
 }
 
-// === SHADER COMPILATION ===
+// === PLATFORM-AGNOSTIC SHADER COMPILATION ===
+// Platform-specific shader version handling is moved to build folders
 
 fn compile_shader(
     gl: &glow::Context,
     shader_type: u32,
-    mut source: String
+    source: String
 ) -> Result<glow::Shader, String> {
     unsafe {
-        let is_web = cfg!(target_arch = "wasm32");
-        if is_web {
-            source = source.replace("#VERSION", "#version 300 es\nprecision mediump float;");
-        } else {
-            source = source.replace("#VERSION", "#version 460 core");
-        }
-
         let shader = gl.create_shader(shader_type)?;
         gl.shader_source(shader, &source);
         gl.compile_shader(shader);
@@ -138,22 +136,27 @@ fn compile_shader(
 pub struct Program {
     gl: glow::Context,
     shader_program: glow::Program,
-    object3d1: Object3D,  // Y-axis rotation character
-    object3d2: Object3D,  // X-axis rotation character
-    start_time: Instant,
+    object3d1: Object3D, // Y-axis rotation character
+    object3d2: Object3D, // X-axis rotation character
 }
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
-        let object3d1 = load_model(&gl).map_err(|e| format!("Failed to load model 1: {}", e))?;
-        let object3d2 = load_model(&gl).map_err(|e| format!("Failed to load model 2: {}", e))?;
+        // Initialize assets with GL context
+        if let Err(e) = initialize(&gl) {
+            eprintln!("⚠️  Failed to initialize assets with GL context: {}", e);
+        }
+
+        let object3d1 = getObject3DCopy(Assets::TestingDoll);
+        let object3d2 = getObject3DCopy(Assets::TestingDoll);
 
         unsafe {
-            let vs_src = include_str!("assets/shaders/vertex.glsl");
-            let fs_src = include_str!("assets/shaders/fragment.glsl");
+            // Platform-specific shader source preparation is handled by platform code
+            let vs_src = get_vertex_shader_source();
+            let fs_src = get_fragment_shader_source();
 
-            let vs = compile_shader(&gl, glow::VERTEX_SHADER, vs_src.to_string())?;
-            let fs = compile_shader(&gl, glow::FRAGMENT_SHADER, fs_src.to_string())?;
+            let vs = compile_shader(&gl, glow::VERTEX_SHADER, vs_src)?;
+            let fs = compile_shader(&gl, glow::FRAGMENT_SHADER, fs_src)?;
 
             let program = gl.create_program()?;
             gl.attach_shader(program, vs);
@@ -170,19 +173,18 @@ impl Program {
             gl.use_program(Some(program));
             gl.enable(glow::DEPTH_TEST);
 
+            println!("✅ Program initialized successfully with assets from singleton manager");
+
             Ok(Self {
                 gl,
                 shader_program: program,
                 object3d1,
                 object3d2,
-                start_time: Instant::now(),
             })
         }
     }
 
-    pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
-        let time_since_start = self.start_time.elapsed().as_secs_f32();
-
+    pub fn render(&mut self, width: u32, height: u32, time_since_start: f32) -> Result<(), String> {
         // Apply animation to both characters
         apply_animation(time_since_start, &mut self.object3d1);
         apply_animation(time_since_start, &mut self.object3d2);
@@ -205,7 +207,12 @@ impl Program {
             );
 
             // Upload texture uniforms (shared by both objects)
-            if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "baseColorTexture") {
+            if
+                let Some(loc) = self.gl.get_uniform_location(
+                    self.shader_program,
+                    "baseColorTexture"
+                )
+            {
                 self.gl.uniform_1_i32(Some(&loc), 0); // Texture unit 0
             }
             if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "hasTexture") {
@@ -218,7 +225,7 @@ impl Program {
             {
                 self.object3d1.transform.set_rotation_y(angle);
                 self.object3d1.transform.set_translation(-2.0, -3.0, -5.0);
-                
+
                 let world_txfm = self.object3d1.get_transform_matrix();
                 self.gl.bind_vertex_array(Some(self.object3d1.mesh.vao));
 
@@ -228,7 +235,9 @@ impl Program {
 
                 if let Some(skeleton) = &self.object3d1.skeleton {
                     for (i, &joint_id) in skeleton.joint_ids.iter().enumerate() {
-                        if i >= 20 { break; }
+                        if i >= 20 {
+                            break;
+                        }
                         inverse_bone_matrices[i] = skeleton.joint_inverse_mats[i];
                         bone_matrices[i] = node_world_txfm(&skeleton.nodes, joint_id as usize);
                     }
@@ -249,10 +258,19 @@ impl Program {
                     &world_txfm
                 );
 
-                let flat_inverse: Vec<f32> = inverse_bone_matrices.iter().flatten().copied().collect();
+                let flat_inverse: Vec<f32> = inverse_bone_matrices
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .collect();
                 let flat_bones: Vec<f32> = bone_matrices.iter().flatten().copied().collect();
 
-                if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "inverse_bone_matrix") {
+                if
+                    let Some(loc) = self.gl.get_uniform_location(
+                        self.shader_program,
+                        "inverse_bone_matrix"
+                    )
+                {
                     self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_inverse);
                 }
                 if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "bone_matrix") {
@@ -272,7 +290,7 @@ impl Program {
             {
                 self.object3d2.transform.set_rotation_x(angle);
                 self.object3d2.transform.set_translation(2.0, -3.0, -5.0);
-                
+
                 let world_txfm = self.object3d2.get_transform_matrix();
                 self.gl.bind_vertex_array(Some(self.object3d2.mesh.vao));
 
@@ -282,7 +300,9 @@ impl Program {
 
                 if let Some(skeleton) = &self.object3d2.skeleton {
                     for (i, &joint_id) in skeleton.joint_ids.iter().enumerate() {
-                        if i >= 20 { break; }
+                        if i >= 20 {
+                            break;
+                        }
                         inverse_bone_matrices[i] = skeleton.joint_inverse_mats[i];
                         bone_matrices[i] = node_world_txfm(&skeleton.nodes, joint_id as usize);
                     }
@@ -303,10 +323,19 @@ impl Program {
                     &world_txfm
                 );
 
-                let flat_inverse: Vec<f32> = inverse_bone_matrices.iter().flatten().copied().collect();
+                let flat_inverse: Vec<f32> = inverse_bone_matrices
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .collect();
                 let flat_bones: Vec<f32> = bone_matrices.iter().flatten().copied().collect();
 
-                if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "inverse_bone_matrix") {
+                if
+                    let Some(loc) = self.gl.get_uniform_location(
+                        self.shader_program,
+                        "inverse_bone_matrix"
+                    )
+                {
                     self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_inverse);
                 }
                 if let Some(loc) = self.gl.get_uniform_location(self.shader_program, "bone_matrix") {
@@ -334,4 +363,10 @@ impl Program {
             self.gl.delete_vertex_array(self.object3d2.mesh.vao);
         }
     }
+}
+
+// Platform-specific functions to be implemented by platform code
+extern "Rust" {
+    fn get_vertex_shader_source() -> String;
+    fn get_fragment_shader_source() -> String;
 }

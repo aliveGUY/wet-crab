@@ -21,6 +21,7 @@ pub use material_mod::Material;
 pub use skeleton_mod::*;
 pub use animation_mod::*;
 
+#[derive(Clone)]
 pub struct Object3D {
     pub transform: Transform,
     pub mesh: Mesh,

@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 gltf = "1.4"
+once_cell = "1.19"
 wasm-bindgen = "0.2"
 bytemuck = "1.23.1"
 wasm-bindgen-futures = "0.4"
