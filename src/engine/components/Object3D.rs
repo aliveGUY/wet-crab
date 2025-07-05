@@ -51,6 +51,7 @@ impl Object3D {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_transform_and_mesh(transform: Transform, mesh: Mesh) -> Self {
         Self {
             transform,
@@ -65,6 +66,7 @@ impl Object3D {
         self.material = Some(material);
     }
 
+    #[allow(dead_code)]
     pub fn has_material(&self) -> bool {
         self.material.is_some()
     }
@@ -77,14 +79,17 @@ impl Object3D {
         self.animation_channels = channels;
     }
 
+    #[allow(dead_code)]
     pub fn add_animation_channel(&mut self, channel: AnimationChannel) {
         self.animation_channels.push(channel);
     }
 
+    #[allow(dead_code)]
     pub fn has_skeleton(&self) -> bool {
         self.skeleton.is_some()
     }
 
+    #[allow(dead_code)]
     pub fn has_animations(&self) -> bool {
         !self.animation_channels.is_empty()
     }
@@ -93,6 +98,7 @@ impl Object3D {
         self.transform.get_matrix()
     }
 
+    #[allow(dead_code)]
     pub fn is_renderable(&self) -> bool {
         self.mesh.is_valid()
     }

@@ -11,16 +11,14 @@ mod object3d {
 use object3d::*;
 
 mod gltf_loader_utils {
-    use super::*;
     include!("engine/utils/GLTFLoaderUtils.rs");
 }
 
 mod assets_manager {
-    use super::*;
     include!("engine/managers/AssetsManager.rs");
 }
 
-use assets_manager::{ initialize, getObject3DCopy, Assets };
+use assets_manager::{ initialize, get_object3d_copy, Assets };
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a * (1.0 - t) + b * t
@@ -147,8 +145,17 @@ impl Program {
             eprintln!("⚠️  Failed to initialize assets with GL context: {}", e);
         }
 
-        let object3d1 = getObject3DCopy(Assets::TestingDoll);
-        let object3d2 = getObject3DCopy(Assets::TestingDoll);
+        let object3d1 = get_object3d_copy(Assets::TestingDoll)
+            .unwrap_or_else(|| {
+                eprintln!("⚠️  Failed to get TestingDoll asset copy, using default");
+                Object3D::new()
+            });
+        
+        let object3d2 = get_object3d_copy(Assets::TestingDoll)
+            .unwrap_or_else(|| {
+                eprintln!("⚠️  Failed to get TestingDoll asset copy, using default");
+                Object3D::new()
+            });
 
         unsafe {
             // Platform-specific shader source preparation is handled by platform code
@@ -356,6 +363,7 @@ impl Program {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn cleanup(&self) {
         unsafe {
             self.gl.delete_program(self.shader_program);

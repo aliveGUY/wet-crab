@@ -18,6 +18,7 @@ pub fn mat4x4_translate(x: f32, y: f32, z: f32) -> Mat4x4 {
     ]
 }
 
+#[allow(dead_code)]
 pub fn mat4x4_rot_y(angle: f32) -> Mat4x4 {
     let c = angle.cos();
     let s = angle.sin();

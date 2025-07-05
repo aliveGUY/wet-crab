@@ -4,7 +4,6 @@ use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
 use glutin::surface::{ SurfaceAttributesBuilder, WindowSurface };
 use glutin_winit::DisplayBuilder;
-use glow::HasContext;
 use raw_window_handle::HasWindowHandle;
 use std::num::NonZeroU32;
 use std::time::Instant;

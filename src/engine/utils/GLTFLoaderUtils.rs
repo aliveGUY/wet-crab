@@ -1,4 +1,7 @@
 use gltf::buffer::Data;
+use glow::HasContext;
+use crate::index::object3d::{Mesh, Material, Skeleton, Node, AnimationChannel, AnimationType};
+use crate::index::math::mat4x4_transpose;
 
 pub fn extract_mesh(
     gl: &glow::Context,

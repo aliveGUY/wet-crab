@@ -3,8 +3,11 @@ use glow::HasContext;
 #[derive(Debug, Clone)]
 pub struct Material {
     pub base_color_texture: Option<glow::Texture>,
+    #[allow(dead_code)]
     pub metallic_factor: f32,
+    #[allow(dead_code)]
     pub roughness_factor: f32,
+    #[allow(dead_code)]
     pub double_sided: bool,
 }
 
@@ -18,6 +21,7 @@ impl Material {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_texture(texture: glow::Texture) -> Self {
         Self {
             base_color_texture: Some(texture),
@@ -27,10 +31,12 @@ impl Material {
         }
     }
 
+    #[allow(dead_code)]
     pub fn has_texture(&self) -> bool {
         self.base_color_texture.is_some()
     }
 
+    #[allow(dead_code)]
     pub fn cleanup(&self, gl: &glow::Context) {
         if let Some(texture) = self.base_color_texture {
             unsafe {

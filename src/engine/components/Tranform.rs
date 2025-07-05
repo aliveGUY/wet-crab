@@ -19,6 +19,7 @@ impl Transform {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_components(translation: [f32; 3], rotation: [f32; 4], scale: [f32; 3]) -> Self {
         Self {
             translation,
@@ -29,6 +30,7 @@ impl Transform {
         }
     }
 
+    #[allow(dead_code)]
     pub fn translate(&mut self, x: f32, y: f32, z: f32) {
         self.translation[0] += x;
         self.translation[1] += y;
@@ -41,11 +43,13 @@ impl Transform {
         self.dirty = true;
     }
 
+    #[allow(dead_code)]
     pub fn set_rotation(&mut self, x: f32, y: f32, z: f32, w: f32) {
         self.rotation = [x, y, z, w];
         self.dirty = true;
     }
 
+    #[allow(dead_code)]
     pub fn set_scale(&mut self, x: f32, y: f32, z: f32) {
         self.scale = [x, y, z];
         self.dirty = true;

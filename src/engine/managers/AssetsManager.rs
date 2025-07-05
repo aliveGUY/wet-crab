@@ -32,7 +32,7 @@ impl AssetsManager {
         println!("🔄 Initializing AssetsManager and loading all assets...");
         
         // Load TestingDoll asset once
-        self.loadGltf(
+        self.load_gltf(
             "../../assets/meshes/guy.gltf",
             "../../assets/meshes/guy.bin", 
             "../../assets/textures/Material Base Color.png",
@@ -45,31 +45,31 @@ impl AssetsManager {
         Ok(())
     }
 
-    fn getObject3DCopy(&self, assetName: Assets) -> Option<Object3D> {
+    fn get_object3d_copy(&self, asset_name: Assets) -> Option<Object3D> {
         if !self.initialized {
             eprintln!("❌ AssetsManager not initialized! Call initialize() first.");
             return None;
         }
 
         // Simply get copy from map - no file access, no GL context needed
-        if let Some(object3d) = self.assets.get(&assetName) {
-            println!("✅ Retrieved copy of asset: {:?} from cache", assetName);
+        if let Some(object3d) = self.assets.get(&asset_name) {
+            println!("✅ Retrieved copy of asset: {:?} from cache", asset_name);
             Some(object3d.clone())
         } else {
-            eprintln!("❌ Asset {:?} not found in cache", assetName);
+            eprintln!("❌ Asset {:?} not found in cache", asset_name);
             None
         }
     }
 
-    fn loadGltf(
+    fn load_gltf(
         &mut self,
-        gltfPath: &str,
-        binPath: &str,
-        texturePath: &str,
-        assetName: Assets,
+        gltf_path: &str,
+        bin_path: &str,
+        texture_path: &str,
+        asset_name: Assets,
         gl: &glow::Context
     ) -> Result<(), Box<dyn std::error::Error>> {
-        println!("🔄 Loading GLTF from paths: {}, {}, {}", gltfPath, binPath, texturePath);
+        println!("🔄 Loading GLTF from paths: {}, {}, {}", gltf_path, bin_path, texture_path);
         
         // Load and parse asset files ONCE during initialization
         let gltf_data = include_str!("../../assets/meshes/guy.gltf");
@@ -97,8 +97,8 @@ impl AssetsManager {
         object3d.set_animation_channels(animation_channels);
 
         // Store complete Object3D in map
-        self.assets.insert(assetName, object3d);
-        println!("✅ Loaded and cached asset: {:?}", assetName);
+        self.assets.insert(asset_name, object3d);
+        println!("✅ Loaded and cached asset: {:?}", asset_name);
         Ok(())
     }
 }
@@ -113,6 +113,6 @@ pub fn initialize(gl: &glow::Context) -> Result<(), Box<dyn std::error::Error>> 
     ASSETS_MANAGER.lock().unwrap().initialize(gl)
 }
 
-pub fn getObject3DCopy(assetName: Assets) -> Option<Object3D> {
-    ASSETS_MANAGER.lock().unwrap().getObject3DCopy(assetName)
+pub fn get_object3d_copy(asset_name: Assets) -> Option<Object3D> {
+    ASSETS_MANAGER.lock().unwrap().get_object3d_copy(asset_name)
 }
