@@ -5,49 +5,17 @@ mod transform_mod {
 mod mesh_mod {
     include!("Mesh.rs");
 }
+mod skeleton_mod {
+    include!("Skeleton.rs");
+}
+mod animation_mod {
+    include!("AnimationState.rs");
+}
 
 pub use transform_mod::Transform;
 pub use mesh_mod::Mesh;
-
-// Optional components for skeletal animation
-#[derive(Debug, Clone)]
-pub struct Node {
-    pub translation: [f32; 3],
-    pub rotation: [f32; 4],
-    pub scale: [f32; 3],
-    pub parent: u32,
-}
-
-pub struct Skeleton {
-    pub nodes: Vec<Node>,
-    pub joint_ids: Vec<u32>,
-    pub joint_inverse_mats: Vec<[f32; 16]>,
-}
-
-#[derive(Debug, Clone)]
-pub enum AnimationType {
-    Translation = 0,
-    Rotation = 1,
-    Scale = 2,
-}
-
-#[derive(Debug, Clone)]
-pub struct AnimationChannel {
-    pub target: u32,
-    pub animation_type: AnimationType,
-    pub num_timesteps: usize,
-    pub times: Vec<f32>,
-    pub data: Vec<f32>,
-}
-
-impl AnimationChannel {
-    pub fn components(&self) -> usize {
-        match self.animation_type {
-            AnimationType::Translation | AnimationType::Scale => 3,
-            AnimationType::Rotation => 4,
-        }
-    }
-}
+pub use skeleton_mod::*;
+pub use animation_mod::*;
 
 // Main Object3D struct
 pub struct Object3D {

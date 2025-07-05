@@ -96,13 +96,14 @@ pub fn mat4x4_mul(a: Mat4x4, b: Mat4x4) -> Mat4x4 {
     ret
 }
 
-pub fn mat4x4_perspective(n: f32, f: f32) -> Mat4x4 {
-    let a = -f / (f - n);
-    let b = (-f * n) / (f - n);
+pub fn mat4x4_perspective(fov_y_radians: f32, aspect_ratio: f32, near: f32, far: f32) -> Mat4x4 {
+    let f = 1.0 / (fov_y_radians * 0.5).tan();
+    let range_inv = 1.0 / (near - far);
+    
     [
-      1.0, 0.0, 0.0, 0.0, 
-      0.0, 1.0, 0.0, 0.0, 
-      0.0, 0.0,  a,   b, 
-      0.0, 0.0, -1.0, 0.0
+        f / aspect_ratio, 0.0, 0.0,                          0.0,
+        0.0,              f,   0.0,                          0.0,
+        0.0,              0.0, (near + far) * range_inv,     (2.0 * near * far) * range_inv,
+        0.0,              0.0, -1.0,                         0.0,
     ]
 }
