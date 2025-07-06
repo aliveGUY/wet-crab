@@ -7,13 +7,15 @@ use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasWindowHandle;
 use std::num::NonZeroU32;
 use std::time::Instant;
+use std::collections::HashSet;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{WindowEvent, KeyEvent, ElementState};
 use winit::event_loop::{ ActiveEventLoop, EventLoop };
 use winit::window::{ Window, WindowId };
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 mod index;
-use index::Program;
+use index::{Program, Event, EventType};
 
 // Platform-specific shader source functions for Linux/Native
 #[no_mangle]
@@ -40,6 +42,67 @@ pub fn get_static_fragment_shader_source() -> String {
     source.replace("#VERSION", "#version 460 core")
 }
 
+struct InputState {
+    pressed_keys: HashSet<KeyCode>,
+    last_mouse_pos: Option<(f64, f64)>,
+    last_direction: String,
+}
+
+impl InputState {
+    fn new() -> Self {
+        Self {
+            pressed_keys: HashSet::new(),
+            last_mouse_pos: None,
+            last_direction: "idle".to_string(),
+        }
+    }
+
+    fn calculate_direction(&self) -> String {
+        let w = self.pressed_keys.contains(&KeyCode::KeyW);
+        let a = self.pressed_keys.contains(&KeyCode::KeyA);
+        let s = self.pressed_keys.contains(&KeyCode::KeyS);
+        let d = self.pressed_keys.contains(&KeyCode::KeyD);
+
+        // Apply cancellation logic
+        let forward = w && !s;
+        let back = s && !w;
+        let left = a && !d;
+        let right = d && !a;
+
+        match (forward, back, left, right) {
+            (true, false, true, false) => "forward-left".to_string(),
+            (true, false, false, true) => "forward-right".to_string(),
+            (false, true, true, false) => "back-left".to_string(),
+            (false, true, false, true) => "back-right".to_string(),
+            (true, false, false, false) => "forward".to_string(),
+            (false, true, false, false) => "back".to_string(),
+            (false, false, true, false) => "left".to_string(),
+            (false, false, false, true) => "right".to_string(),
+            _ => "idle".to_string(),
+        }
+    }
+
+    fn mouse_delta_to_quaternion(delta_x: f64, delta_y: f64) -> [f32; 4] {
+        let sensitivity = 0.002;
+        let yaw = (delta_x * sensitivity) as f32;
+        let pitch = (delta_y * sensitivity) as f32;
+
+        // Create quaternion from yaw and pitch
+        let cos_yaw = (yaw * 0.5).cos();
+        let sin_yaw = (yaw * 0.5).sin();
+        let cos_pitch = (pitch * 0.5).cos();
+        let sin_pitch = (pitch * 0.5).sin();
+
+        // Combine yaw and pitch quaternions
+        [
+            cos_yaw * cos_pitch,
+            sin_yaw * cos_pitch,
+            cos_yaw * sin_pitch,
+            -sin_yaw * sin_pitch,
+        ]
+    }
+}
+
 struct App {
     window: Option<Window>,
     gl_context: Option<glutin::context::PossiblyCurrentContext>,
@@ -47,6 +110,66 @@ struct App {
     program: Option<Program>,
     start_time: Option<Instant>,
     last_frame_time: Option<Instant>,
+    input_state: InputState,
+}
+
+impl App {
+    fn handle_keyboard_input(&mut self, event: KeyEvent) {
+        if let PhysicalKey::Code(key_code) = event.physical_key {
+            match key_code {
+                KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD => {
+                    match event.state {
+                        ElementState::Pressed => {
+                            self.input_state.pressed_keys.insert(key_code);
+                        }
+                        ElementState::Released => {
+                            self.input_state.pressed_keys.remove(&key_code);
+                        }
+                    }
+                    
+                    let new_direction = self.input_state.calculate_direction();
+                    if new_direction != self.input_state.last_direction {
+                        self.input_state.last_direction = new_direction.clone();
+                        
+                        let event = Event {
+                            event_type: EventType::Move,
+                            payload: Box::new(new_direction),
+                        };
+                        
+                        if let Some(program) = &mut self.program {
+                            program.receive_event(&event);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn handle_mouse_movement(&mut self, x: f64, y: f64) {
+        let current_pos = (x, y);
+        
+        if let Some(last_pos) = self.input_state.last_mouse_pos {
+            let delta_x = current_pos.0 - last_pos.0;
+            let delta_y = current_pos.1 - last_pos.1;
+            
+            // Only send event if there's significant movement
+            if delta_x.abs() > 1.0 || delta_y.abs() > 1.0 {
+                let quaternion = InputState::mouse_delta_to_quaternion(delta_x, delta_y);
+                
+                let event = Event {
+                    event_type: EventType::RotateCamera,
+                    payload: Box::new(quaternion),
+                };
+                
+                if let Some(program) = &mut self.program {
+                    program.receive_event(&event);
+                }
+            }
+        }
+        
+        self.input_state.last_mouse_pos = Some(current_pos);
+    }
 }
 
 impl ApplicationHandler for App {
@@ -158,6 +281,12 @@ impl ApplicationHandler for App {
                     window.request_redraw();
                 }
             }
+            WindowEvent::KeyboardInput { event, .. } => {
+                self.handle_keyboard_input(event);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.handle_mouse_movement(position.x, position.y);
+            }
             _ => (),
         }
     }
@@ -181,6 +310,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         program: None,
         start_time: None,
         last_frame_time: None,
+        input_state: InputState::new(),
     };
 
     event_loop.run_app(&mut app)?;
