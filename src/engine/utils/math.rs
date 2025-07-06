@@ -115,7 +115,7 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 // Calculate world transform for a node in a skeleton hierarchy
-pub fn node_world_txfm(nodes: &[crate::index::object3d::Node], idx: usize) -> Mat4x4 {
+pub fn node_world_txfm(nodes: &[crate::index::animated_object3d::Node], idx: usize) -> Mat4x4 {
     let node = &nodes[idx];
 
     let mut node_txfm = mat4x4_scale(node.scale[0], node.scale[1], node.scale[2]);

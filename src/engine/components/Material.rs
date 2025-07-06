@@ -1,14 +1,8 @@
 use glow::HasContext;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ShaderType {
-    Static,
-    Animated,
-}
-
 #[derive(Debug, Clone)]
 pub struct Material {
-    pub shader_type: ShaderType,
+    pub shader_program: glow::Program,
     pub base_color_texture: Option<glow::Texture>,
     #[allow(dead_code)]
     pub metallic_factor: f32,
@@ -19,9 +13,9 @@ pub struct Material {
 }
 
 impl Material {
-    pub fn new() -> Self {
+    pub fn new(shader_program: glow::Program) -> Self {
         Self {
-            shader_type: ShaderType::Static, // Default to static
+            shader_program,
             base_color_texture: None,
             metallic_factor: 0.0,
             roughness_factor: 0.5,
@@ -29,30 +23,9 @@ impl Material {
         }
     }
 
-    pub fn new_with_shader_type(shader_type: ShaderType) -> Self {
+    pub fn with_texture(shader_program: glow::Program, texture: glow::Texture) -> Self {
         Self {
-            shader_type,
-            base_color_texture: None,
-            metallic_factor: 0.0,
-            roughness_factor: 0.5,
-            double_sided: false,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn with_texture(texture: glow::Texture) -> Self {
-        Self {
-            shader_type: ShaderType::Static, // Default to static
-            base_color_texture: Some(texture),
-            metallic_factor: 0.0,
-            roughness_factor: 0.5,
-            double_sided: false,
-        }
-    }
-
-    pub fn with_texture_and_shader(texture: glow::Texture, shader_type: ShaderType) -> Self {
-        Self {
-            shader_type,
+            shader_program,
             base_color_texture: Some(texture),
             metallic_factor: 0.0,
             roughness_factor: 0.5,
@@ -81,11 +54,5 @@ impl Material {
                 gl.delete_texture(texture);
             }
         }
-    }
-}
-
-impl Default for Material {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -1,24 +1,28 @@
 use gltf::buffer::Data;
 use glow::HasContext;
-use crate::index::object3d::{Mesh, Material, Skeleton, Node, AnimationChannel, AnimationType, ShaderType};
+use crate::index::shared_components::{Mesh, Material};
+use crate::index::animated_object3d::{Skeleton, Node, AnimationChannel, AnimationType};
 use crate::index::math::mat4x4_transpose;
 
 pub fn extract_mesh(
     gl: &glow::Context,
     gltf: &gltf::Gltf,
-    buffers: &[Data]
-) -> Result<Mesh, Box<dyn std::error::Error>> {
+    buffers: &[Data],
+    asset_name: crate::index::assets_manager::Assets
+) -> Mesh {
     let primitive = gltf
         .meshes()
         .next()
-        .ok_or("No mesh found")?
+        .unwrap_or_else(|| panic!("No mesh found for {:?}", asset_name))
         .primitives()
         .next()
-        .ok_or("No primitive found")?;
+        .unwrap_or_else(|| panic!("No primitive found for {:?}", asset_name));
 
     macro_rules! extract {
         ($sem:expr, $ty:ty) => {
-            extract_buffer_data::<$ty>(&buffers, &primitive.get(&$sem).ok_or(concat!("Missing ", stringify!($sem)))?)?
+            extract_buffer_data::<$ty>(&buffers, &primitive.get(&$sem)
+                .unwrap_or_else(|| panic!("Missing {} for {:?}", stringify!($sem), asset_name)))
+                .unwrap_or_else(|e| panic!("Failed to extract {} for {:?}: {}", stringify!($sem), asset_name, e))
         };
     }
 
@@ -35,8 +39,8 @@ pub fn extract_mesh(
     let tex_coords: Vec<f32> = extract!(gltf::Semantic::TexCoords(0), f32);
     let indices: Vec<u16> = extract_buffer_data(
         &buffers,
-        &primitive.indices().ok_or("No indices")?
-    )?;
+        &primitive.indices().unwrap_or_else(|| panic!("No indices found for {:?}", asset_name))
+    ).unwrap_or_else(|e| panic!("Failed to extract indices for {:?}: {}", asset_name, e));
 
     // Extract skeletal data (optional - only for animated meshes)
     let joints: Option<Vec<u8>> = extract_optional!(gltf::Semantic::Joints(0), u8);
@@ -45,7 +49,8 @@ pub fn extract_mesh(
     let has_skeletal_data = joints.is_some() && weights.is_some();
 
     unsafe {
-        let vao = gl.create_vertex_array()?;
+        let vao = gl.create_vertex_array()
+            .unwrap_or_else(|e| panic!("Failed to create VAO for {:?}: {}", asset_name, e));
         gl.bind_vertex_array(Some(vao));
 
         let setup_attrib = |loc, data: &[u8], size, ty, stride, int| {
@@ -73,7 +78,8 @@ pub fn extract_mesh(
             }
         }
 
-        let ebo = gl.create_buffer()?;
+        let ebo = gl.create_buffer()
+            .unwrap_or_else(|e| panic!("Failed to create EBO for {:?}: {}", asset_name, e));
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
         gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
@@ -83,18 +89,19 @@ pub fn extract_mesh(
 
         gl.bind_vertex_array(None);
 
-        Ok(Mesh {
+        Mesh {
             vao,
             index_count: indices.len(),
             vertex_count: positions.len() / 3,
-        })
+        }
     }
 }
 
 pub fn extract_skeleton(
     gltf: &gltf::Gltf,
-    buffers: &[Data]
-) -> Result<Option<Skeleton>, Box<dyn std::error::Error>> {
+    buffers: &[Data],
+    asset_name: crate::index::assets_manager::Assets
+) -> Skeleton {
     let mut node_parents = vec![u32::MAX; gltf.nodes().len()];
     for node in gltf.nodes() {
         for child in node.children() {
@@ -122,7 +129,8 @@ pub fn extract_skeleton(
             .collect();
         let mut inv_mats = Vec::new();
         if let Some(ibm) = skin.inverse_bind_matrices() {
-            let data: Vec<f32> = extract_buffer_data(&buffers, &ibm)?;
+            let data: Vec<f32> = extract_buffer_data(&buffers, &ibm)
+                .unwrap_or_else(|e| panic!("Failed to extract inverse bind matrices for {:?}: {}", asset_name, e));
             inv_mats = data
                 .chunks(16)
                 .map(|m| {
@@ -134,23 +142,21 @@ pub fn extract_skeleton(
         }
         (ids, inv_mats)
     } else {
-        (Vec::new(), Vec::new())
+        panic!("No skeleton/skin found for animated asset {:?}", asset_name);
     };
 
-    Ok(
-        if !nodes.is_empty() {
-            Some(Skeleton {
-                nodes,
-                joint_ids,
-                joint_inverse_mats,
-            })
-        } else {
-            None
-        }
-    )
+    if nodes.is_empty() {
+        panic!("No nodes found for skeleton in {:?}", asset_name);
+    }
+
+    Skeleton {
+        nodes,
+        joint_ids,
+        joint_inverse_mats,
+    }
 }
 
-pub fn extract_animation_channels(gltf: &gltf::Gltf, buffers: &[Data]) -> Vec<AnimationChannel> {
+pub fn extract_animation_channels(gltf: &gltf::Gltf, buffers: &[Data], asset_name: crate::index::assets_manager::Assets) -> Vec<AnimationChannel> {
     gltf.animations()
         .next()
         .map(|anim| {
@@ -240,75 +246,67 @@ pub fn extract_material(
     gl: &glow::Context,
     gltf: &gltf::Gltf,
     _buffers: &[Data],
-    png_data: &[u8]
-) -> Result<Option<Material>, Box<dyn std::error::Error>> {
-    if let Some(material) = gltf.materials().next() {
-        let pbr = material.pbr_metallic_roughness();
-        
-        // Determine shader type based on whether the model has skeletal data
-        let shader_type = if has_skeletal_data(gltf) {
-            ShaderType::Animated
-        } else {
-            ShaderType::Static
-        };
-        
-        let mut mat = Material {
-            shader_type,
-            base_color_texture: None,
-            metallic_factor: pbr.metallic_factor(),
-            roughness_factor: pbr.roughness_factor(),
-            double_sided: material.double_sided(),
-        };
+    png_data: &[u8],
+    shader_program: glow::Program,
+    asset_name: crate::index::assets_manager::Assets
+) -> Material {
+    let material = gltf.materials().next()
+        .unwrap_or_else(|| panic!("No material found for {:?}", asset_name));
+    
+    let pbr = material.pbr_metallic_roughness();
+    
+    let mut mat = Material::new(shader_program);
+    mat.metallic_factor = pbr.metallic_factor();
+    mat.roughness_factor = pbr.roughness_factor();
+    mat.double_sided = material.double_sided();
 
-        // Extract texture if present
-        if let Some(base_color_info) = pbr.base_color_texture() {
-            let texture_index = base_color_info.texture().index();
-            if let Some(texture) = gltf.textures().nth(texture_index) {
-                if let Some(_image) = gltf.images().nth(texture.source().index()) {
-                    
-                    match decode_png_with_crate(png_data) {
-                        Ok((width, height, rgba_pixels)) => {
-                            unsafe {
-                                let gl_texture = gl.create_texture()?;
-                                gl.bind_texture(glow::TEXTURE_2D, Some(gl_texture));
-                                
-                                gl.tex_image_2d(
-                                    glow::TEXTURE_2D,
-                                    0,
-                                    glow::RGBA as i32,
-                                    width as i32,
-                                    height as i32,
-                                    0,
-                                    glow::RGBA,
-                                    glow::UNSIGNED_BYTE,
-                                    glow::PixelUnpackData::Slice(Some(&rgba_pixels))
-                                );
-                                
-                                // Set texture parameters
-                                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-                                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
-                                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);
-                                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);
-                                
-                                gl.bind_texture(glow::TEXTURE_2D, None);
-                                
-                                mat.base_color_texture = Some(gl_texture);
-                                
-                                println!("✅ Texture loaded: {}x{} pixels", width, height);
-                            }
+    // Extract texture if present
+    if let Some(base_color_info) = pbr.base_color_texture() {
+        let texture_index = base_color_info.texture().index();
+        if let Some(texture) = gltf.textures().nth(texture_index) {
+            if let Some(_image) = gltf.images().nth(texture.source().index()) {
+                
+                match decode_png_with_crate(png_data) {
+                    Ok((width, height, rgba_pixels)) => {
+                        unsafe {
+                            let gl_texture = gl.create_texture()
+                                .unwrap_or_else(|e| panic!("Failed to create texture for {:?}: {}", asset_name, e));
+                            gl.bind_texture(glow::TEXTURE_2D, Some(gl_texture));
+                            
+                            gl.tex_image_2d(
+                                glow::TEXTURE_2D,
+                                0,
+                                glow::RGBA as i32,
+                                width as i32,
+                                height as i32,
+                                0,
+                                glow::RGBA,
+                                glow::UNSIGNED_BYTE,
+                                glow::PixelUnpackData::Slice(Some(&rgba_pixels))
+                            );
+                            
+                            // Set texture parameters
+                            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+                            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+                            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);
+                            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);
+                            
+                            gl.bind_texture(glow::TEXTURE_2D, None);
+                            
+                            mat.base_color_texture = Some(gl_texture);
+                            
+                            println!("✅ Texture loaded: {}x{} pixels", width, height);
                         }
-                        Err(e) => {
-                            println!("⚠️ Failed to decode PNG: {}", e);
-                        }
+                    }
+                    Err(e) => {
+                        panic!("Failed to decode PNG for {:?}: {}", asset_name, e);
                     }
                 }
             }
         }
-
-        Ok(Some(mat))
-    } else {
-        Ok(None)
     }
+
+    mat
 }
 
 pub fn extract_buffer_data<T: bytemuck::Pod>(

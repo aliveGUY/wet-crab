@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use glow::HasContext;
 
-// Import required components - using the module path from index.rs
-use crate::index::object3d::Object3D;
+// Import required components - using the shared components
+use crate::index::static_object3d::StaticObject3D;
+use crate::index::animated_object3d::AnimatedObject3D;
+use crate::index::shared_components::{Transform, Mesh, Material};
 use crate::index::gltf_loader_utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -12,14 +15,20 @@ pub enum Assets {
 }
 
 struct AssetsManager {
-    assets: HashMap<Assets, Object3D>,
+    static_assets: HashMap<Assets, StaticObject3D>,
+    animated_assets: HashMap<Assets, AnimatedObject3D>,
+    static_shader_program: Option<glow::Program>,
+    animated_shader_program: Option<glow::Program>,
     initialized: bool,
 }
 
 impl AssetsManager {
     fn new() -> Self {
         Self {
-            assets: HashMap::new(),
+            static_assets: HashMap::new(),
+            animated_assets: HashMap::new(),
+            static_shader_program: None,
+            animated_shader_program: None,
             initialized: false,
         }
     }
@@ -32,119 +41,227 @@ impl AssetsManager {
 
         println!("🔄 Initializing AssetsManager and loading all assets...");
 
-        self.load_gltf(
+        // Create shader programs first
+        let static_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_static.glsl"),
+            include_str!("../../assets/shaders/fragment_static.glsl"),
+            "static"
+        );
+        let animated_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_animated.glsl"),
+            include_str!("../../assets/shaders/fragment_animated.glsl"),
+            "animated"
+        );
+
+        self.static_shader_program = Some(static_shader);
+        self.animated_shader_program = Some(animated_shader);
+
+        // Load animated asset (TestingDoll)
+        self.load_animated_gltf(
             include_str!("../../assets/meshes/guy.gltf"),
             include_bytes!("../../assets/meshes/guy.bin"),
             include_bytes!("../../assets/textures/Material Base Color.png"),
             Assets::TestingDoll,
+            animated_shader,
             gl
         );
 
-        self.load_gltf(
+        // Load static asset (Chair)
+        self.load_static_gltf(
             include_str!("../../assets/meshes/chair.gltf"),
             include_bytes!("../../assets/meshes/chair.bin"),
             include_bytes!("../../assets/textures/wood-texture.png"),
             Assets::Chair,
+            static_shader,
             gl
         );
 
         self.initialized = true;
-        println!("✅ AssetsManager initialization complete. Loaded {} assets.", self.assets.len());
+        let total_assets = self.static_assets.len() + self.animated_assets.len();
+        println!("✅ AssetsManager initialization complete. Loaded {} assets.", total_assets);
     }
 
-    fn get_object3d_copy(&self, asset_name: Assets) -> Object3D {
+    fn get_static_object_copy(&self, asset_name: Assets) -> StaticObject3D {
         if !self.initialized {
-            eprintln!(
-                "❌ AssetsManager not initialized! Call initialize() first. Using default Object3D."
-            );
-            return Object3D::new();
+            panic!("❌ AssetsManager not initialized! Call initialize() first.");
         }
 
-        // Simply get copy from map - no file access, no GL context needed
-        if let Some(object3d) = self.assets.get(&asset_name) {
-            println!("✅ Retrieved copy of asset: {:?} from cache", asset_name);
-            object3d.clone()
+        if let Some(object) = self.static_assets.get(&asset_name) {
+            println!("✅ Retrieved static copy of asset: {:?} from cache", asset_name);
+            object.clone()
         } else {
-            eprintln!("❌ Asset {:?} not found in cache, using default Object3D", asset_name);
-            Object3D::new()
+            panic!("❌ Static asset {:?} not found in cache", asset_name);
         }
     }
 
-    fn load_gltf(
+    fn get_animated_object_copy(&self, asset_name: Assets) -> AnimatedObject3D {
+        if !self.initialized {
+            panic!("❌ AssetsManager not initialized! Call initialize() first.");
+        }
+
+        if let Some(object) = self.animated_assets.get(&asset_name) {
+            println!("✅ Retrieved animated copy of asset: {:?} from cache", asset_name);
+            object.clone()
+        } else {
+            panic!("❌ Animated asset {:?} not found in cache", asset_name);
+        }
+    }
+
+    fn load_static_gltf(
         &mut self,
         gltf_data: &str,
         bin_data: &[u8],
         png_data: &[u8],
         asset_name: Assets,
+        shader_program: glow::Program,
         gl: &glow::Context
     ) {
-        println!("🔄 Loading GLTF asset: {:?}", asset_name);
+        println!("🔄 Loading static GLTF asset: {:?}", asset_name);
 
-        // Parse asset data ONCE during initialization
-        let gltf = match gltf::Gltf::from_slice(gltf_data.as_bytes()) {
-            Ok(gltf) => gltf,
-            Err(e) => {
-                eprintln!("⚠️  Failed to parse GLTF for {:?}: {}", asset_name, e);
-                return;
-            }
-        };
+        // Parse asset data
+        let gltf = gltf::Gltf::from_slice(gltf_data.as_bytes())
+            .unwrap_or_else(|e| panic!("Failed to parse GLTF for {:?}: {}", asset_name, e));
         let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
 
-        // Create Object3D with GPU resources
-        let mesh = match extract_mesh(gl, &gltf, &buffers) {
-            Ok(mesh) => mesh,
-            Err(e) => {
-                eprintln!("⚠️  Failed to extract mesh for {:?}: {}", asset_name, e);
-                return;
-            }
-        };
+        // Extract components - all error handling is internal
+        let mesh = extract_mesh(gl, &gltf, &buffers, asset_name);
+        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, asset_name);
 
-        let material = match extract_material(gl, &gltf, &buffers, png_data) {
-            Ok(material) => material,
-            Err(e) => {
-                eprintln!("⚠️  Failed to extract material for {:?}: {}", asset_name, e);
-                return;
-            }
-        };
+        // Create static object with default transform
+        let mut transform = Transform::new();
+        transform.translate(0.0, 0.0, 0.0); // Default position
 
-        let skeleton = match extract_skeleton(&gltf, &buffers) {
-            Ok(skeleton) => skeleton,
-            Err(e) => {
-                eprintln!("⚠️  Failed to extract skeleton for {:?}: {}", asset_name, e);
-                return;
-            }
-        };
+        let static_object = StaticObject3D::new(transform, mesh, material);
 
-        let animation_channels = extract_animation_channels(&gltf, &buffers);
+        // Store in static assets map
+        self.static_assets.insert(asset_name, static_object);
+        println!("✅ Loaded and cached static asset: {:?}", asset_name);
+    }
 
-        let mut object3d = Object3D::with_mesh(mesh);
+    fn load_animated_gltf(
+        &mut self,
+        gltf_data: &str,
+        bin_data: &[u8],
+        png_data: &[u8],
+        asset_name: Assets,
+        shader_program: glow::Program,
+        gl: &glow::Context
+    ) {
+        println!("🔄 Loading animated GLTF asset: {:?}", asset_name);
 
-        if let Some(mat) = material {
-            object3d.set_material(mat);
-        }
+        // Parse asset data
+        let gltf = gltf::Gltf::from_slice(gltf_data.as_bytes())
+            .unwrap_or_else(|e| panic!("Failed to parse GLTF for {:?}: {}", asset_name, e));
+        let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
 
-        if let Some(skel) = skeleton {
-            object3d.set_skeleton(skel);
-        }
+        // Extract components - all error handling is internal
+        let mesh = extract_mesh(gl, &gltf, &buffers, asset_name);
+        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, asset_name);
+        let skeleton = extract_skeleton(&gltf, &buffers, asset_name);
+        let animation_channels = extract_animation_channels(&gltf, &buffers, asset_name);
 
-        object3d.set_animation_channels(animation_channels);
+        // Create animated object with default transform
+        let mut transform = Transform::new();
+        transform.translate(0.0, 0.0, 0.0); // Default position
 
-        // Store complete Object3D in map
-        self.assets.insert(asset_name, object3d);
-        println!("✅ Loaded and cached asset: {:?}", asset_name);
+        let animated_object = AnimatedObject3D::new(
+            transform, 
+            mesh, 
+            material, 
+            skeleton, 
+            animation_channels
+        );
+
+        // Store in animated assets map
+        self.animated_assets.insert(asset_name, animated_object);
+        println!("✅ Loaded and cached animated asset: {:?}", asset_name);
     }
 }
+
+// Platform-specific shader version detection
+fn get_shader_version() -> &'static str {
+    #[cfg(target_arch = "wasm32")]
+    {
+        "#version 300 es\nprecision mediump float;"
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        "#version 330 core"
+    }
+}
+
+// Shader creation functions
+fn compile_shader(
+    gl: &glow::Context,
+    shader_type: u32,
+    source: String
+) -> Result<glow::Shader, String> {
+    unsafe {
+        let shader = gl.create_shader(shader_type)?;
+        gl.shader_source(shader, &source);
+        gl.compile_shader(shader);
+
+        if !gl.get_shader_compile_status(shader) {
+            let log = gl.get_shader_info_log(shader);
+            gl.delete_shader(shader);
+            return Err(format!("Shader compile error: {}", log));
+        }
+        Ok(shader)
+    }
+}
+
+fn create_shader_program(
+    gl: &glow::Context,
+    vertex_shader_source: &str,
+    fragment_shader_source: &str,
+    program_name: &str
+) -> glow::Program {
+    unsafe {
+        // Handle version injection internally
+        let vs_src = vertex_shader_source.replace("#VERSION", get_shader_version());
+        let fs_src = fragment_shader_source.replace("#VERSION", get_shader_version());
+
+        let vs = compile_shader(gl, glow::VERTEX_SHADER, vs_src)
+            .unwrap_or_else(|e| panic!("Failed to compile {} vertex shader: {}", program_name, e));
+        let fs = compile_shader(gl, glow::FRAGMENT_SHADER, fs_src)
+            .unwrap_or_else(|e| panic!("Failed to compile {} fragment shader: {}", program_name, e));
+
+        let program = gl.create_program()
+            .unwrap_or_else(|e| panic!("Failed to create {} shader program: {}", program_name, e));
+        gl.attach_shader(program, vs);
+        gl.attach_shader(program, fs);
+        gl.link_program(program);
+
+        if !gl.get_program_link_status(program) {
+            let log = gl.get_program_info_log(program);
+            panic!("{} shader program link error: {}", program_name, log);
+        }
+
+        gl.delete_shader(vs);
+        gl.delete_shader(fs);
+
+        println!("✅ Created {} shader program", program_name);
+        program
+    }
+}
+
 
 // Global singleton instance
 static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {
     std::sync::Mutex::new(AssetsManager::new())
 });
 
-// Public API - Only two methods as requested
+// Public API
 pub fn initialize(gl: &glow::Context) {
     ASSETS_MANAGER.lock().unwrap().initialize(gl)
 }
 
-pub fn get_object3d_copy(asset_name: Assets) -> Object3D {
-    ASSETS_MANAGER.lock().unwrap().get_object3d_copy(asset_name)
+pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3D {
+    ASSETS_MANAGER.lock().unwrap().get_static_object_copy(asset_name)
+}
+
+pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3D {
+    ASSETS_MANAGER.lock().unwrap().get_animated_object_copy(asset_name)
 }
