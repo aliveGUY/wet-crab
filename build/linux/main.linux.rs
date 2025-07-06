@@ -18,13 +18,25 @@ use index::Program;
 // Platform-specific shader source functions for Linux/Native
 #[no_mangle]
 pub fn get_vertex_shader_source() -> String {
-    let source = include_str!("../src/assets/shaders/vertex.glsl");
+    let source = include_str!("../src/assets/shaders/vertex_animated.glsl");
     source.replace("#VERSION", "#version 460 core")
 }
 
 #[no_mangle]
 pub fn get_fragment_shader_source() -> String {
-    let source = include_str!("../src/assets/shaders/fragment.glsl");
+    let source = include_str!("../src/assets/shaders/fragment_animated.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
+#[no_mangle]
+pub fn get_static_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex_static.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
+#[no_mangle]
+pub fn get_static_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment_static.glsl");
     source.replace("#VERSION", "#version 460 core")
 }
 

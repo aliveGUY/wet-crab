@@ -3,7 +3,7 @@ import os
 import shutil
 import signal
 import sys
-import psutil
+# import psutil  # Commented out to avoid dependency
 import mimetypes
 
 mimetypes.add_type("application/javascript", ".js")
@@ -47,18 +47,9 @@ def signal_handler(sig, frame):
 
 def kill_existing_server(port):
     """Завершение процессов, использующих порт"""
-    try:
-        for proc in psutil.process_iter(["pid", "name"]):
-            try:
-                for conn in proc.connections(kind="inet"):
-                    if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
-                        info(f"Завершаем процесс {proc.pid}, использующий порт {port}")
-                        proc.kill()
-                        break
-            except (psutil.AccessDenied, psutil.NoSuchProcess):
-                continue
-    except Exception as e:
-        info(f"⚠️ Не удалось завершить процессы на порту {port}: {e}")
+    # Commented out psutil functionality to avoid dependency
+    info(f"⚠️ Пропускаем проверку процессов на порту {port} (psutil не установлен)")
+    pass
 
 
 def main():

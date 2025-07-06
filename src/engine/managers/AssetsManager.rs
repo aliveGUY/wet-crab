@@ -8,6 +8,7 @@ use crate::index::gltf_loader_utils::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Assets {
     TestingDoll,
+    Chair,
 }
 
 struct AssetsManager {
@@ -36,6 +37,14 @@ impl AssetsManager {
             include_bytes!("../../assets/meshes/guy.bin"),
             include_bytes!("../../assets/textures/Material Base Color.png"),
             Assets::TestingDoll,
+            gl
+        );
+
+        self.load_gltf(
+            include_str!("../../assets/meshes/chair.gltf"),
+            include_bytes!("../../assets/meshes/chair.bin"),
+            include_bytes!("../../assets/textures/wood-texture.png"),
+            Assets::Chair,
             gl
         );
 

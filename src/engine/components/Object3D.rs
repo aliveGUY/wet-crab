@@ -20,7 +20,7 @@ mod animator_mod {
 
 pub use transform_mod::Transform;
 pub use mesh_mod::Mesh;
-pub use material_mod::Material;
+pub use material_mod::{Material, ShaderType};
 pub use skeleton_mod::*;
 pub use animation_mod::*;
 pub use animator_mod::Animator;

@@ -1,6 +1,6 @@
 use gltf::buffer::Data;
 use glow::HasContext;
-use crate::index::object3d::{Mesh, Material, Skeleton, Node, AnimationChannel, AnimationType};
+use crate::index::object3d::{Mesh, Material, Skeleton, Node, AnimationChannel, AnimationType, ShaderType};
 use crate::index::math::mat4x4_transpose;
 
 pub fn extract_mesh(
@@ -22,15 +22,27 @@ pub fn extract_mesh(
         };
     }
 
+    macro_rules! extract_optional {
+        ($sem:expr, $ty:ty) => {
+            primitive.get(&$sem)
+                .and_then(|accessor| extract_buffer_data::<$ty>(&buffers, &accessor).ok())
+        };
+    }
+
+    // Extract basic mesh data (always required)
     let positions: Vec<f32> = extract!(gltf::Semantic::Positions, f32);
     let normals: Vec<f32> = extract!(gltf::Semantic::Normals, f32);
     let tex_coords: Vec<f32> = extract!(gltf::Semantic::TexCoords(0), f32);
-    let joints: Vec<u8> = extract!(gltf::Semantic::Joints(0), u8);
-    let weights: Vec<f32> = extract!(gltf::Semantic::Weights(0), f32);
     let indices: Vec<u16> = extract_buffer_data(
         &buffers,
         &primitive.indices().ok_or("No indices")?
     )?;
+
+    // Extract skeletal data (optional - only for animated meshes)
+    let joints: Option<Vec<u8>> = extract_optional!(gltf::Semantic::Joints(0), u8);
+    let weights: Option<Vec<f32>> = extract_optional!(gltf::Semantic::Weights(0), f32);
+
+    let has_skeletal_data = joints.is_some() && weights.is_some();
 
     unsafe {
         let vao = gl.create_vertex_array()?;
@@ -48,11 +60,18 @@ pub fn extract_mesh(
             }
         };
 
-        setup_attrib(1, bytemuck::cast_slice(&positions), 3, glow::FLOAT, 12, false);
-        setup_attrib(0, bytemuck::cast_slice(&normals), 3, glow::FLOAT, 12, false);
-        setup_attrib(4, bytemuck::cast_slice(&tex_coords), 2, glow::FLOAT, 8, false);
-        setup_attrib(2, &joints, 4, glow::UNSIGNED_BYTE, 4, true);
-        setup_attrib(3, bytemuck::cast_slice(&weights), 4, glow::FLOAT, 16, false);
+        // Set up basic mesh attributes (always present)
+        setup_attrib(1, bytemuck::cast_slice(&positions), 3, glow::FLOAT, 12, false);  // Position
+        setup_attrib(0, bytemuck::cast_slice(&normals), 3, glow::FLOAT, 12, false);    // Normal
+        setup_attrib(4, bytemuck::cast_slice(&tex_coords), 2, glow::FLOAT, 8, false);  // TexCoord
+
+        // Set up skeletal attributes (only if present)
+        if has_skeletal_data {
+            if let (Some(joints_data), Some(weights_data)) = (joints, weights) {
+                setup_attrib(2, &joints_data, 4, glow::UNSIGNED_BYTE, 4, true);           // Joints
+                setup_attrib(3, bytemuck::cast_slice(&weights_data), 4, glow::FLOAT, 16, false); // Weights
+            }
+        }
 
         let ebo = gl.create_buffer()?;
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
@@ -203,6 +222,20 @@ fn decode_png_with_crate(png_data: &[u8]) -> Result<(u32, u32, Vec<u8>), Box<dyn
     Ok((width, height, pixels))
 }
 
+// Helper function to determine if GLTF has skeletal data
+pub fn has_skeletal_data(gltf: &gltf::Gltf) -> bool {
+    // Check if any mesh primitive has joints and weights
+    for mesh in gltf.meshes() {
+        for primitive in mesh.primitives() {
+            if primitive.get(&gltf::Semantic::Joints(0)).is_some() && 
+               primitive.get(&gltf::Semantic::Weights(0)).is_some() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn extract_material(
     gl: &glow::Context,
     gltf: &gltf::Gltf,
@@ -212,7 +245,15 @@ pub fn extract_material(
     if let Some(material) = gltf.materials().next() {
         let pbr = material.pbr_metallic_roughness();
         
+        // Determine shader type based on whether the model has skeletal data
+        let shader_type = if has_skeletal_data(gltf) {
+            ShaderType::Animated
+        } else {
+            ShaderType::Static
+        };
+        
         let mut mat = Material {
+            shader_type,
             base_color_texture: None,
             metallic_factor: pbr.metallic_factor(),
             roughness_factor: pbr.roughness_factor(),
