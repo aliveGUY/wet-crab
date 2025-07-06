@@ -8,6 +8,31 @@ use std::cell::RefCell;
 mod index;
 use index::Program;
 
+// Platform-specific shader source functions for Web/WASM
+#[no_mangle]
+pub fn get_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex_animated.glsl");
+    source.replace("#VERSION", "#version 300 es\nprecision mediump float;")
+}
+
+#[no_mangle]
+pub fn get_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment_animated.glsl");
+    source.replace("#VERSION", "#version 300 es\nprecision mediump float;")
+}
+
+#[no_mangle]
+pub fn get_static_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex_static.glsl");
+    source.replace("#VERSION", "#version 300 es\nprecision mediump float;")
+}
+
+#[no_mangle]
+pub fn get_static_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment_static.glsl");
+    source.replace("#VERSION", "#version 300 es\nprecision mediump float;")
+}
+
 struct RenderState {
     program: Program,
     canvas: HtmlCanvasElement,
@@ -73,10 +98,14 @@ fn request_animation_frame(render_state: Rc<RefCell<RenderState>>) -> Result<(),
         
         state.last_frame_time = current_time;
         
+        // Get canvas dimensions before mutable borrow
+        let canvas_width = state.canvas.width();
+        let canvas_height = state.canvas.height();
+        
         // Render frame
         if let Err(e) = state.program.render(
-            state.canvas.width(), 
-            state.canvas.height(), 
+            canvas_width, 
+            canvas_height, 
             elapsed_time
         ) {
             web_sys::console::error_1(&format!("Render error: {}", e).into());

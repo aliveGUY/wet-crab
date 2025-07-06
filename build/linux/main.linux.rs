@@ -4,7 +4,6 @@ use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
 use glutin::surface::{ SurfaceAttributesBuilder, WindowSurface };
 use glutin_winit::DisplayBuilder;
-use glow::HasContext;
 use raw_window_handle::HasWindowHandle;
 use std::num::NonZeroU32;
 use std::time::Instant;
@@ -15,6 +14,31 @@ use winit::window::{ Window, WindowId };
 
 mod index;
 use index::Program;
+
+// Platform-specific shader source functions for Linux/Native
+#[no_mangle]
+pub fn get_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex_animated.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
+#[no_mangle]
+pub fn get_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment_animated.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
+#[no_mangle]
+pub fn get_static_vertex_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/vertex_static.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
+
+#[no_mangle]
+pub fn get_static_fragment_shader_source() -> String {
+    let source = include_str!("../src/assets/shaders/fragment_static.glsl");
+    source.replace("#VERSION", "#version 460 core")
+}
 
 struct App {
     window: Option<Window>,
@@ -100,7 +124,7 @@ impl ApplicationHandler for App {
                     let (Some(surface), Some(context), Some(program)) = (
                         &self.gl_surface,
                         &self.gl_context,
-                        &self.program,
+                        &mut self.program,
                     )
                 {
                     if let Some(window) = &self.window {
