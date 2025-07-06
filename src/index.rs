@@ -30,18 +30,33 @@ mod assets_manager {
 
 use assets_manager::{ initialize, get_static_object_copy, get_animated_object_copy, Assets };
 
+pub mod event_system {
+    include!("engine/systems/EventSystem.rs");
+}
+
+pub mod movement_listeners {
+    include!("game/listeners/MovementsListeners.rs");
+}
+
+use event_system::EventSystem;
+use movement_listeners::{MovementListener, CameraRotationListener};
+
+// Re-export for platform-specific builds
+pub use event_system::{Event, EventType};
+
 // === MAIN PROGRAM ===
 
 pub struct Program {
     gl: glow::Context,
-    animated_object: AnimatedObject3D, // TestingDoll
-    static_object: StaticObject3D,     // Chair
+    animated_object: AnimatedObject3D,
+    static_object: StaticObject3D,
+    event_system: EventSystem,
 }
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
         initialize(&gl);
-        
+
         // Load objects with correct types
         let mut animated_object = get_animated_object_copy(Assets::TestingDoll);
         let mut static_object = get_static_object_copy(Assets::Chair);
@@ -50,16 +65,24 @@ impl Program {
         animated_object.transform.translate(-2.0, -3.0, -5.0);
         static_object.transform.translate(2.0, -3.0, -5.0);
 
+        let mut event_system = EventSystem::new();
+
+        event_system.subscribe(event_system::EventType::Move, Box::new(MovementListener));
+        event_system.subscribe(event_system::EventType::RotateCamera, Box::new(CameraRotationListener));
+
         unsafe {
             gl.enable(glow::DEPTH_TEST);
         }
 
-        println!("✅ Program initialized successfully with shared components and shader-in-material architecture");
+        println!(
+            "✅ Program initialized successfully with shared components and shader-in-material architecture"
+        );
 
         Ok(Self {
             gl,
             animated_object,
             static_object,
+            event_system,
         })
     }
 
@@ -74,7 +97,10 @@ impl Program {
             let viewport_txfm = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
 
             // Set viewport transform for both objects (they handle their own shaders)
-            self.setup_viewport_uniform(&viewport_txfm, self.animated_object.material.shader_program);
+            self.setup_viewport_uniform(
+                &viewport_txfm,
+                self.animated_object.material.shader_program
+            );
             self.setup_viewport_uniform(&viewport_txfm, self.static_object.material.shader_program);
 
             // Render objects - they handle their own shader binding and uniforms
@@ -84,6 +110,10 @@ impl Program {
             self.gl.bind_vertex_array(None);
         }
         Ok(())
+    }
+
+    pub fn receive_event(&mut self, event: &event_system::Event) {
+        self.event_system.notify(event);
     }
 
     fn setup_viewport_uniform(&self, viewport_txfm: &[f32; 16], shader_program: glow::Program) {
