@@ -28,7 +28,12 @@ mod assets_manager {
     include!("engine/managers/AssetsManager.rs");
 }
 
-use assets_manager::{ initialize, get_static_object_copy, get_animated_object_copy, Assets };
+mod game_state {
+    include!("game/gloabals/GameState.rs");
+}
+
+use assets_manager::{ initialize_asset_manager, get_static_object_copy, get_animated_object_copy, Assets };
+use game_state::{initialize_game_state, get_camera_transform};
 
 pub mod event_system {
     include!("engine/systems/EventSystem.rs");
@@ -39,7 +44,7 @@ pub mod movement_listeners {
 }
 
 use event_system::EventSystem;
-use movement_listeners::{MovementListener, CameraRotationListener};
+use movement_listeners::{ MovementListener, CameraRotationListener };
 
 // Re-export for platform-specific builds
 pub use event_system::{Event, EventType};
@@ -55,7 +60,8 @@ pub struct Program {
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
-        initialize(&gl);
+        initialize_asset_manager(&gl);
+        initialize_game_state();
 
         // Load objects with correct types
         let mut animated_object = get_animated_object_copy(Assets::TestingDoll);
@@ -92,9 +98,16 @@ impl Program {
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
+            // Create projection matrix
             let fov = (90.0_f32).to_radians();
             let aspect_ratio = (width as f32) / (height as f32);
-            let viewport_txfm = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
+            let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
+
+            // Get camera transform (view matrix)
+            let view_matrix = get_camera_transform();
+
+            // Combine projection and view matrices for final viewport transform
+            let viewport_txfm = mat4x4_mul(projection_matrix, view_matrix);
 
             // Set viewport transform for both objects (they handle their own shaders)
             self.setup_viewport_uniform(

@@ -19,6 +19,19 @@ pub fn mat4x4_translate(x: f32, y: f32, z: f32) -> Mat4x4 {
 }
 
 #[allow(dead_code)]
+pub fn mat4x4_rot_x(angle: f32) -> Mat4x4 {
+    let c = angle.cos();
+    let s = angle.sin();
+
+    [
+      1.0, 0.0, 0.0, 0.0,
+      0.0,  c,  -s,  0.0,
+      0.0,  s,   c,  0.0,
+      0.0, 0.0, 0.0, 1.0
+    ]
+}
+
+#[allow(dead_code)]
 pub fn mat4x4_rot_y(angle: f32) -> Mat4x4 {
     let c = angle.cos();
     let s = angle.sin();
@@ -29,6 +42,30 @@ pub fn mat4x4_rot_y(angle: f32) -> Mat4x4 {
        s,  0.0,  c,  0.0, 
       0.0, 0.0, 0.0, 1.0
     ]
+}
+
+#[allow(dead_code)]
+pub fn mat4x4_rot_z(angle: f32) -> Mat4x4 {
+    let c = angle.cos();
+    let s = angle.sin();
+
+    [
+       c,  -s,  0.0, 0.0,
+       s,   c,  0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      0.0, 0.0, 0.0, 1.0
+    ]
+}
+
+// Create rotation matrix from Euler angles (pitch, yaw, roll)
+pub fn mat4x4_from_euler(pitch: f32, yaw: f32, roll: f32) -> Mat4x4 {
+    // Apply rotations in order: Y (yaw), X (pitch), Z (roll)
+    let rot_y = mat4x4_rot_y(yaw);
+    let rot_x = mat4x4_rot_x(pitch);
+    let rot_z = mat4x4_rot_z(roll);
+    
+    // Combine rotations: Z * X * Y
+    mat4x4_mul(rot_z, mat4x4_mul(rot_x, rot_y))
 }
 
 pub fn mat4x4_scale(x: f32, y: f32, z: f32) -> Mat4x4 {

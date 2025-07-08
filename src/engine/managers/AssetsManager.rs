@@ -33,7 +33,7 @@ impl AssetsManager {
         }
     }
 
-    fn initialize(&mut self, gl: &glow::Context) {
+    fn initialize_asset_manager(&mut self, gl: &glow::Context) {
         if self.initialized {
             println!("⚠️  AssetsManager already initialized");
             return;
@@ -85,7 +85,7 @@ impl AssetsManager {
 
     fn get_static_object_copy(&self, asset_name: Assets) -> StaticObject3D {
         if !self.initialized {
-            panic!("❌ AssetsManager not initialized! Call initialize() first.");
+            panic!("❌ AssetsManager not initialized! Call initialize_asset_manager() first.");
         }
 
         if let Some(object) = self.static_assets.get(&asset_name) {
@@ -98,7 +98,7 @@ impl AssetsManager {
 
     fn get_animated_object_copy(&self, asset_name: Assets) -> AnimatedObject3D {
         if !self.initialized {
-            panic!("❌ AssetsManager not initialized! Call initialize() first.");
+            panic!("❌ AssetsManager not initialized! Call initialize_asset_manager() first.");
         }
 
         if let Some(object) = self.animated_assets.get(&asset_name) {
@@ -254,8 +254,8 @@ static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {
 });
 
 // Public API
-pub fn initialize(gl: &glow::Context) {
-    ASSETS_MANAGER.lock().unwrap().initialize(gl)
+pub fn initialize_asset_manager(gl: &glow::Context) {
+    ASSETS_MANAGER.lock().unwrap().initialize_asset_manager(gl)
 }
 
 pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3D {

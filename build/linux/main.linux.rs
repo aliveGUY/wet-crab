@@ -9,13 +9,13 @@ use std::num::NonZeroU32;
 use std::time::Instant;
 use std::collections::HashSet;
 use winit::application::ApplicationHandler;
-use winit::event::{WindowEvent, KeyEvent, ElementState};
+use winit::event::{ WindowEvent, KeyEvent, ElementState, DeviceEvent };
 use winit::event_loop::{ ActiveEventLoop, EventLoop };
-use winit::window::{ Window, WindowId };
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::window::{ Window, WindowId, CursorGrabMode };
+use winit::keyboard::{ KeyCode, PhysicalKey };
 
 mod index;
-use index::{Program, Event, EventType};
+use index::{ Program, Event, EventType };
 
 // Platform-specific shader source functions for Linux/Native
 #[no_mangle]
@@ -46,6 +46,7 @@ struct InputState {
     pressed_keys: HashSet<KeyCode>,
     last_mouse_pos: Option<(f64, f64)>,
     last_direction: String,
+    cursor_locked: bool,
 }
 
 impl InputState {
@@ -54,6 +55,7 @@ impl InputState {
             pressed_keys: HashSet::new(),
             last_mouse_pos: None,
             last_direction: "idle".to_string(),
+            cursor_locked: false,
         }
     }
 
@@ -82,24 +84,13 @@ impl InputState {
         }
     }
 
-    fn mouse_delta_to_quaternion(delta_x: f64, delta_y: f64) -> [f32; 4] {
+    fn mouse_delta_to_euler(delta_x: f64, delta_y: f64) -> [f32; 2] {
         let sensitivity = 0.002;
-        let yaw = (delta_x * sensitivity) as f32;
-        let pitch = (delta_y * sensitivity) as f32;
+        let yaw_delta = (delta_x * sensitivity) as f32;
+        let pitch_delta = (delta_y * sensitivity) as f32;
 
-        // Create quaternion from yaw and pitch
-        let cos_yaw = (yaw * 0.5).cos();
-        let sin_yaw = (yaw * 0.5).sin();
-        let cos_pitch = (pitch * 0.5).cos();
-        let sin_pitch = (pitch * 0.5).sin();
-
-        // Combine yaw and pitch quaternions
-        [
-            cos_yaw * cos_pitch,
-            sin_yaw * cos_pitch,
-            cos_yaw * sin_pitch,
-            -sin_yaw * sin_pitch,
-        ]
+        // Return pitch and yaw deltas directly
+        [pitch_delta, yaw_delta]
     }
 }
 
@@ -117,6 +108,11 @@ impl App {
     fn handle_keyboard_input(&mut self, event: KeyEvent) {
         if let PhysicalKey::Code(key_code) = event.physical_key {
             match key_code {
+                KeyCode::Escape => {
+                    if event.state == ElementState::Pressed {
+                        self.unlock_cursor();
+                    }
+                }
                 KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD => {
                     match event.state {
                         ElementState::Pressed => {
@@ -126,19 +122,17 @@ impl App {
                             self.input_state.pressed_keys.remove(&key_code);
                         }
                     }
-                    
+
                     let new_direction = self.input_state.calculate_direction();
-                    if new_direction != self.input_state.last_direction {
-                        self.input_state.last_direction = new_direction.clone();
-                        
-                        let event = Event {
-                            event_type: EventType::Move,
-                            payload: Box::new(new_direction),
-                        };
-                        
-                        if let Some(program) = &mut self.program {
-                            program.receive_event(&event);
-                        }
+                    self.input_state.last_direction = new_direction.clone();
+
+                    let event = Event {
+                        event_type: EventType::Move,
+                        payload: Box::new(new_direction),
+                    };
+
+                    if let Some(program) = &mut self.program {
+                        program.receive_event(&event);
                     }
                 }
                 _ => {}
@@ -146,33 +140,83 @@ impl App {
         }
     }
 
+    fn lock_cursor(&mut self) {
+        if let Some(window) = &self.window {
+            if let Ok(()) = window.set_cursor_grab(CursorGrabMode::Confined) {
+                window.set_cursor_visible(false);
+                self.input_state.cursor_locked = true;
+                println!("🔒 Cursor locked - use ESC to unlock");
+            }
+        }
+    }
+
+    fn unlock_cursor(&mut self) {
+        if let Some(window) = &self.window {
+            let _ = window.set_cursor_grab(CursorGrabMode::None);
+            window.set_cursor_visible(true);
+            self.input_state.cursor_locked = false;
+            self.input_state.last_mouse_pos = None; // Reset mouse tracking
+            println!("🔓 Cursor unlocked");
+        }
+    }
+
+    fn handle_device_mouse_motion(&mut self, delta_x: f64, delta_y: f64) {
+        // Only process if cursor is locked
+        if self.input_state.cursor_locked {
+            let euler_deltas = InputState::mouse_delta_to_euler(delta_x, delta_y);
+
+            let event = Event {
+                event_type: EventType::RotateCamera,
+                payload: Box::new(euler_deltas),
+            };
+
+            if let Some(program) = &mut self.program {
+                program.receive_event(&event);
+            }
+        }
+    }
+
     fn handle_mouse_movement(&mut self, x: f64, y: f64) {
         let current_pos = (x, y);
-        
+
         if let Some(last_pos) = self.input_state.last_mouse_pos {
             let delta_x = current_pos.0 - last_pos.0;
             let delta_y = current_pos.1 - last_pos.1;
-            
+
             // Only send event if there's significant movement
             if delta_x.abs() > 1.0 || delta_y.abs() > 1.0 {
-                let quaternion = InputState::mouse_delta_to_quaternion(delta_x, delta_y);
-                
+                let euler_deltas = InputState::mouse_delta_to_euler(delta_x, delta_y);
+
                 let event = Event {
                     event_type: EventType::RotateCamera,
-                    payload: Box::new(quaternion),
+                    payload: Box::new(euler_deltas),
                 };
-                
+
                 if let Some(program) = &mut self.program {
                     program.receive_event(&event);
                 }
             }
         }
-        
+
         self.input_state.last_mouse_pos = Some(current_pos);
     }
 }
 
 impl ApplicationHandler for App {
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: DeviceEvent
+    ) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                self.handle_device_mouse_motion(delta.0, delta.1);
+            }
+            _ => {}
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             let window_attributes =
@@ -252,24 +296,25 @@ impl ApplicationHandler for App {
                 {
                     if let Some(window) = &self.window {
                         let current_time = Instant::now();
-                        
+
                         // Calculate elapsed time since start
                         let elapsed_time = if let Some(start_time) = self.start_time {
                             current_time.duration_since(start_time).as_secs_f32()
                         } else {
                             0.0
                         };
-                        
+
                         // Update last frame time
                         self.last_frame_time = Some(current_time);
-                        
+
                         let size = window.inner_size();
-                        program.render(size.width, size.height, elapsed_time)
+                        program
+                            .render(size.width, size.height, elapsed_time)
                             .expect("Failed to render triangle");
                     }
 
                     surface.swap_buffers(context).unwrap();
-                    
+
                     // Request continuous rendering
                     if let Some(window) = &self.window {
                         window.request_redraw();
@@ -285,7 +330,16 @@ impl ApplicationHandler for App {
                 self.handle_keyboard_input(event);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.handle_mouse_movement(position.x, position.y);
+                // Only handle cursor movement when not locked
+                if !self.input_state.cursor_locked {
+                    self.handle_mouse_movement(position.x, position.y);
+                }
+            }
+            WindowEvent::MouseInput { state: ElementState::Pressed, .. } => {
+                // Lock cursor on mouse click
+                if !self.input_state.cursor_locked {
+                    self.lock_cursor();
+                }
             }
             _ => (),
         }
