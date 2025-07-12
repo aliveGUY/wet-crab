@@ -59,6 +59,15 @@ fn start_render_loop() -> Result<(), JsValue> {
     {
         let keydown_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
             Box::new(move |ke: KeyboardEvent| {
+                // Handle Escape key for cursor unlocking
+                if ke.code() == "Escape" {
+                    let window = web_sys::window().unwrap();
+                    let document = window.document().unwrap();
+                    if document.pointer_lock_element().is_some() {
+                        document.exit_pointer_lock();
+                        log("Cursor unlocked via Escape key");
+                    }
+                }
                 GlobalEventSystem::receive_native_keyboard_event(&ke);
             })
         );
@@ -90,6 +99,29 @@ fn start_render_loop() -> Result<(), JsValue> {
             mousemove_closure.as_ref().unchecked_ref()
         )?;
         mousemove_closure.forget();
+    }
+
+    {
+        let mousedown_closure = Closure::<dyn FnMut(MouseEvent)>::wrap(
+            Box::new(move |me: MouseEvent| {
+                // Handle cursor locking on left mouse click
+                if me.button() == 0 {
+                    let window = web_sys::window().unwrap();
+                    let document = window.document().unwrap();
+                    if let Some(canvas) = document.get_element_by_id("webgl-canvas") {
+                        let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into().unwrap();
+                        canvas.request_pointer_lock();
+                        log("Cursor locked via left mouse click");
+                    }
+                }
+                GlobalEventSystem::receive_native_mouse_click_event(&me);
+            })
+        );
+        document.add_event_listener_with_callback(
+            "mousedown",
+            mousedown_closure.as_ref().unchecked_ref()
+        )?;
+        mousedown_closure.forget();
     }
 
     request_animation_frame(render_state)?;

@@ -10,7 +10,7 @@ use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{ ElementState, KeyEvent, WindowEvent };
+use winit::event::{ ElementState, KeyEvent, WindowEvent, DeviceEvent, DeviceId };
 use winit::event_loop::{ ActiveEventLoop, EventLoop };
 use winit::keyboard::{ KeyCode, PhysicalKey };
 use winit::window::{ Window, WindowId };
@@ -25,9 +25,20 @@ struct App {
     program: Option<Program>,
     start_time: Option<Instant>,
     last_frame_time: Option<Instant>,
+    cursor_locked: bool,
 }
 
 impl ApplicationHandler for App {
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                // Use raw mouse deltas for unlimited rotation when cursor is locked
+                GlobalEventSystem::receive_device_mouse_motion(delta);
+            }
+            _ => {}
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
@@ -119,10 +130,36 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::KeyboardInput { event, .. } => {
+                // Handle Escape key for cursor unlocking
+                if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) = event.physical_key {
+                    if event.state == ElementState::Pressed && self.cursor_locked {
+                        if let Some(window) = &self.window {
+                            let _ = window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                            window.set_cursor_visible(true);
+                            self.cursor_locked = false;
+                            println!("Cursor unlocked via Escape key");
+                        }
+                    }
+                }
                 GlobalEventSystem::receive_native_keyboard_event(&event);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 GlobalEventSystem::receive_native_mouse_event(&position);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                // Handle cursor locking on left mouse click
+                if button == winit::event::MouseButton::Left && state == ElementState::Pressed && !self.cursor_locked {
+                    if let Some(window) = &self.window {
+                        // Try Locked mode first for infinite movement, fallback to Confined
+                        if window.set_cursor_grab(winit::window::CursorGrabMode::Locked).is_err() {
+                            let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
+                        }
+                        window.set_cursor_visible(false);
+                        self.cursor_locked = true;
+                        println!("Cursor locked via left mouse click");
+                    }
+                }
+                GlobalEventSystem::receive_native_mouse_click_event(&(state, button));
             }
 
             _ => {}
@@ -148,6 +185,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         program: None,
         start_time: None,
         last_frame_time: None,
+        cursor_locked: false,
     };
 
     event_loop.run_app(&mut app)?;

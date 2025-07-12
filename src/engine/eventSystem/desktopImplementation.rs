@@ -1,9 +1,11 @@
 #[cfg(not(target_arch = "wasm32"))]
-use winit::event::{ KeyEvent, ElementState };
+use winit::event::{ KeyEvent, ElementState, MouseButton };
 #[cfg(not(target_arch = "wasm32"))]
 use winit::keyboard::{ KeyCode, PhysicalKey };
 #[cfg(not(target_arch = "wasm32"))]
 use winit::dpi::PhysicalPosition;
+#[cfg(not(target_arch = "wasm32"))]
+use winit::window::{ Window, CursorGrabMode };
 use std::any::Any;
 use std::collections::HashSet;
 use std::sync::RwLock;
@@ -39,6 +41,15 @@ impl DesktopEventHandler {
     
     fn is_movement_key(&self, key_code: KeyCode) -> bool {
         matches!(key_code, KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD)
+    }
+    
+    fn is_escape_key(&self, key_code: KeyCode) -> bool {
+        matches!(key_code, KeyCode::Escape)
+    }
+    
+    fn handle_escape_key(&self) -> Option<Event> {
+        // Escape key handling will be done in main.rs
+        None
     }
     
     fn is_pressed_state(&self, key_event: &KeyEvent) -> bool {
@@ -110,6 +121,11 @@ impl NativeEventHandler for DesktopEventHandler {
         let key_event = self.extract_key_event(event)?;
         let key_code = self.get_key_code(key_event)?;
         
+        // Handle Escape key for cursor unlocking
+        if self.is_escape_key(key_code) && self.is_pressed_state(key_event) {
+            return self.handle_escape_key();
+        }
+        
         if !self.is_movement_key(key_code) {
             return None;
         }
@@ -119,6 +135,7 @@ impl NativeEventHandler for DesktopEventHandler {
     }
 
     fn parse_mouse_event(&self, event: &dyn Any) -> Option<Event> {
+        // Mouse movement processing - cursor locking will be handled in main.rs
         let position = self.extract_mouse_position(event)?;
         let delta = self.calculate_mouse_delta(position)?;
         
@@ -127,5 +144,15 @@ impl NativeEventHandler for DesktopEventHandler {
         }
         
         self.create_camera_event(delta)
+    }
+    
+    fn parse_mouse_click_event(&self, event: &dyn Any) -> Option<Event> {
+        // Mouse click handling will be done in main.rs
+        None
+    }
+    
+    fn should_process_mouse_movement(&self) -> bool {
+        // Always allow mouse movement processing - cursor locking handled in main.rs
+        true
     }
 }

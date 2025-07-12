@@ -77,4 +77,37 @@ impl GlobalEventSystem {
         
         Self::notify(&event.unwrap());
     }
+    
+    pub fn receive_native_mouse_click_event(raw_event: &dyn Any) {
+        let instance = Self::instance();
+        let system = instance.lock().unwrap();
+        let event = system.native_handler.parse_mouse_click_event(raw_event);
+        drop(system);
+        
+        if event.is_none() {
+            return;
+        }
+        
+        Self::notify(&event.unwrap());
+    }
+    
+    pub fn receive_device_mouse_motion(delta: (f64, f64)) {
+        let instance = Self::instance();
+        let system = instance.lock().unwrap();
+        let should_process = system.native_handler.should_process_mouse_movement();
+        drop(system);
+        
+        if !should_process {
+            return;
+        }
+        
+        // Create camera rotation event from raw mouse deltas
+        let euler_deltas = crate::index::engine::utils::inputUtils::mouse_delta_to_euler(delta.0, delta.1);
+        let event = Event {
+            event_type: EventType::RotateCamera,
+            payload: Box::new(euler_deltas),
+        };
+        
+        Self::notify(&event);
+    }
 }
