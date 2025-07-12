@@ -4,6 +4,7 @@ use web_sys::{ HtmlCanvasElement, WebGl2RenderingContext, KeyboardEvent, MouseEv
 use glow::Context;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::collections::HashSet;
 
 mod index;
 use index::{ Program };
@@ -14,6 +15,7 @@ struct RenderState {
     canvas: HtmlCanvasElement,
     start_time: f64,
     last_frame_time: f64,
+    pressed_keys: HashSet<String>,  // Track currently pressed keys
 }
 
 #[wasm_bindgen(start)]
@@ -54,10 +56,13 @@ fn start_render_loop() -> Result<(), JsValue> {
             canvas,
             start_time: 0.0,
             last_frame_time: 0.0,
+            pressed_keys: HashSet::new(),
         })
     );
 
+    // Setup keyboard state tracking for concurrent movement
     {
+        let state_clone = render_state.clone();
         let keydown_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
             Box::new(move |ke: KeyboardEvent| {
                 // Handle Escape key for cursor unlocking
@@ -69,7 +74,12 @@ fn start_render_loop() -> Result<(), JsValue> {
                         log("Cursor unlocked via Escape key");
                     }
                 }
-                InputSystem::instance().receive_key_event(&ke);
+                
+                // Track pressed keys for concurrent movement
+                let key_code = ke.code();
+                if matches!(key_code.as_str(), "KeyW" | "KeyA" | "KeyS" | "KeyD" | "Space" | "ShiftLeft" | "ShiftRight") {
+                    state_clone.borrow_mut().pressed_keys.insert(key_code);
+                }
             })
         );
         document.add_event_listener_with_callback(
@@ -80,9 +90,12 @@ fn start_render_loop() -> Result<(), JsValue> {
     }
 
     {
+        let state_clone = render_state.clone();
         let keyup_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
             Box::new(move |ke: KeyboardEvent| {
-                InputSystem::instance().receive_key_event(&ke);
+                // Remove key from pressed set
+                let key_code = ke.code();
+                state_clone.borrow_mut().pressed_keys.remove(&key_code);
             })
         );
         document.add_event_listener_with_callback("keyup", keyup_closure.as_ref().unchecked_ref())?;
@@ -127,8 +140,46 @@ fn start_render_loop() -> Result<(), JsValue> {
 
     request_animation_frame(render_state)?;
 
+    log("🎮 Browser concurrent input ready!");
+    log("📝 Instructions:");
+    log("   - Hold WASD keys for movement");
+    log("   - Move mouse for camera rotation");
+    log("   - Left click to lock cursor");
+    log("   - Escape to unlock cursor");
+    log("   - Both inputs work simultaneously!");
     log("🔺 Continuous rendering loop started!");
     Ok(())
+}
+
+fn process_keyboard_state(pressed_keys: &HashSet<String>) {
+    let mut movement_direction = String::new();
+
+    if pressed_keys.contains("KeyW") {
+        movement_direction.push_str("forward");
+    }
+    if pressed_keys.contains("KeyS") {
+        if !movement_direction.is_empty() {
+            movement_direction.push('-');
+        }
+        movement_direction.push_str("backward");
+    }
+    if pressed_keys.contains("KeyA") {
+        if !movement_direction.is_empty() {
+            movement_direction.push('-');
+        }
+        movement_direction.push_str("left");
+    }
+    if pressed_keys.contains("KeyD") {
+        if !movement_direction.is_empty() {
+            movement_direction.push('-');
+        }
+        movement_direction.push_str("right");
+    }
+
+    if !movement_direction.is_empty() {
+        // Send to InputSystem - clean bridge pattern (same as Linux)
+        InputSystem::instance().receive_key_event(&movement_direction);
+    }
 }
 
 fn request_animation_frame(state_rc: Rc<RefCell<RenderState>>) -> Result<(), JsValue> {
@@ -143,6 +194,9 @@ fn request_animation_frame(state_rc: Rc<RefCell<RenderState>>) -> Result<(), JsV
 
             let elapsed = ((now_ms - state.start_time) / 1000.0) as f32;
             state.last_frame_time = now_ms;
+
+            // Process keyboard state for concurrent movement (like Linux version)
+            process_keyboard_state(&state.pressed_keys);
 
             let (w, h) = (state.canvas.width(), state.canvas.height());
             if let Err(e) = state.program.render(w, h, elapsed) {

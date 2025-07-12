@@ -111,6 +111,15 @@ impl InputHandler for BrowserInputHandler {
     fn receive_key_event(&self, raw_event: &dyn Any) -> Option<Event> {
         #[cfg(target_arch = "wasm32")]
         {
+            // Handle String input from concurrent movement system (like DesktopInputHandler)
+            if let Some(direction) = raw_event.downcast_ref::<String>() {
+                return Some(Event {
+                    event_type: EventType::Move,
+                    payload: Box::new(direction.clone()),
+                });
+            }
+
+            // Handle individual KeyboardEvent (legacy support)
             if let Some(key_event) = raw_event.downcast_ref::<web_sys::KeyboardEvent>() {
                 let key_code = key_event.code();
 
