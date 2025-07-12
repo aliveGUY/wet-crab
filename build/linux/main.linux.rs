@@ -7,7 +7,6 @@ use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasWindowHandle;
 use std::num::NonZeroU32;
 use std::time::Instant;
-use std::collections::HashSet;
 use winit::application::ApplicationHandler;
 use winit::event::{ WindowEvent, KeyEvent, ElementState, DeviceEvent };
 use winit::event_loop::{ ActiveEventLoop, EventLoop };
@@ -15,93 +14,18 @@ use winit::window::{ Window, WindowId, CursorGrabMode };
 use winit::keyboard::{ KeyCode, PhysicalKey };
 
 mod index;
-use index::{ Program, Event, EventType };
-
-// Platform-specific shader source functions for Linux/Native
-#[no_mangle]
-pub fn get_vertex_shader_source() -> String {
-    let source = include_str!("../src/assets/shaders/vertex_animated.glsl");
-    source.replace("#VERSION", "#version 460 core")
-}
-
-#[no_mangle]
-pub fn get_fragment_shader_source() -> String {
-    let source = include_str!("../src/assets/shaders/fragment_animated.glsl");
-    source.replace("#VERSION", "#version 460 core")
-}
-
-#[no_mangle]
-pub fn get_static_vertex_shader_source() -> String {
-    let source = include_str!("../src/assets/shaders/vertex_static.glsl");
-    source.replace("#VERSION", "#version 460 core")
-}
-
-#[no_mangle]
-pub fn get_static_fragment_shader_source() -> String {
-    let source = include_str!("../src/assets/shaders/fragment_static.glsl");
-    source.replace("#VERSION", "#version 460 core")
-}
-
-struct InputState {
-    pressed_keys: HashSet<KeyCode>,
-    last_mouse_pos: Option<(f64, f64)>,
-    last_direction: String,
-    cursor_locked: bool,
-}
-
-impl InputState {
-    fn new() -> Self {
-        Self {
-            pressed_keys: HashSet::new(),
-            last_mouse_pos: None,
-            last_direction: "idle".to_string(),
-            cursor_locked: false,
-        }
-    }
-
-    fn calculate_direction(&self) -> String {
-        let w = self.pressed_keys.contains(&KeyCode::KeyW);
-        let a = self.pressed_keys.contains(&KeyCode::KeyA);
-        let s = self.pressed_keys.contains(&KeyCode::KeyS);
-        let d = self.pressed_keys.contains(&KeyCode::KeyD);
-
-        // Apply cancellation logic
-        let forward = w && !s;
-        let back = s && !w;
-        let left = a && !d;
-        let right = d && !a;
-
-        match (forward, back, left, right) {
-            (true, false, true, false) => "forward-left".to_string(),
-            (true, false, false, true) => "forward-right".to_string(),
-            (false, true, true, false) => "back-left".to_string(),
-            (false, true, false, true) => "back-right".to_string(),
-            (true, false, false, false) => "forward".to_string(),
-            (false, true, false, false) => "back".to_string(),
-            (false, false, true, false) => "left".to_string(),
-            (false, false, false, true) => "right".to_string(),
-            _ => "idle".to_string(),
-        }
-    }
-
-    fn mouse_delta_to_euler(delta_x: f64, delta_y: f64) -> [f32; 2] {
-        let sensitivity = 0.002;
-        let yaw_delta = (delta_x * sensitivity) as f32;
-        let pitch_delta = (delta_y * sensitivity) as f32;
-
-        // Return pitch and yaw deltas directly
-        [pitch_delta, yaw_delta]
-    }
-}
+use index::{ Program };
+use index::engine::eventSystem::{EventSystem, DesktopEventHandler};
 
 struct App {
     window: Option<Window>,
     gl_context: Option<glutin::context::PossiblyCurrentContext>,
     gl_surface: Option<glutin::surface::Surface<WindowSurface>>,
     program: Option<Program>,
+    event_system: Option<EventSystem>,
     start_time: Option<Instant>,
     last_frame_time: Option<Instant>,
-    input_state: InputState,
+    cursor_locked: bool,
 }
 
 impl App {
@@ -114,25 +38,9 @@ impl App {
                     }
                 }
                 KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD => {
-                    match event.state {
-                        ElementState::Pressed => {
-                            self.input_state.pressed_keys.insert(key_code);
-                        }
-                        ElementState::Released => {
-                            self.input_state.pressed_keys.remove(&key_code);
-                        }
-                    }
-
-                    let new_direction = self.input_state.calculate_direction();
-                    self.input_state.last_direction = new_direction.clone();
-
-                    let event = Event {
-                        event_type: EventType::Move,
-                        payload: Box::new(new_direction),
-                    };
-
-                    if let Some(program) = &mut self.program {
-                        program.receive_event(&event);
+                    // Pass raw keyboard event to EventSystem
+                    if let Some(event_system) = &self.event_system {
+                        event_system.receive_native_keyboard_event(&event);
                     }
                 }
                 _ => {}
@@ -144,7 +52,7 @@ impl App {
         if let Some(window) = &self.window {
             if let Ok(()) = window.set_cursor_grab(CursorGrabMode::Confined) {
                 window.set_cursor_visible(false);
-                self.input_state.cursor_locked = true;
+                self.cursor_locked = true;
                 println!("🔒 Cursor locked - use ESC to unlock");
             }
         }
@@ -154,51 +62,30 @@ impl App {
         if let Some(window) = &self.window {
             let _ = window.set_cursor_grab(CursorGrabMode::None);
             window.set_cursor_visible(true);
-            self.input_state.cursor_locked = false;
-            self.input_state.last_mouse_pos = None; // Reset mouse tracking
+            self.cursor_locked = false;
             println!("🔓 Cursor unlocked");
         }
     }
 
-    fn handle_device_mouse_motion(&mut self, delta_x: f64, delta_y: f64) {
+    fn handle_device_mouse_motion(&mut self, delta: (f64, f64)) {
         // Only process if cursor is locked
-        if self.input_state.cursor_locked {
-            let euler_deltas = InputState::mouse_delta_to_euler(delta_x, delta_y);
-
-            let event = Event {
-                event_type: EventType::RotateCamera,
-                payload: Box::new(euler_deltas),
-            };
-
-            if let Some(program) = &mut self.program {
-                program.receive_event(&event);
+        if self.cursor_locked {
+            // Pass raw device event to EventSystem
+            if let Some(event_system) = &self.event_system {
+                let device_event = DeviceEvent::MouseMotion { delta };
+                event_system.receive_native_mouse_event(&device_event);
             }
         }
     }
 
     fn handle_mouse_movement(&mut self, x: f64, y: f64) {
-        let current_pos = (x, y);
-
-        if let Some(last_pos) = self.input_state.last_mouse_pos {
-            let delta_x = current_pos.0 - last_pos.0;
-            let delta_y = current_pos.1 - last_pos.1;
-
-            // Only send event if there's significant movement
-            if delta_x.abs() > 1.0 || delta_y.abs() > 1.0 {
-                let euler_deltas = InputState::mouse_delta_to_euler(delta_x, delta_y);
-
-                let event = Event {
-                    event_type: EventType::RotateCamera,
-                    payload: Box::new(euler_deltas),
-                };
-
-                if let Some(program) = &mut self.program {
-                    program.receive_event(&event);
-                }
+        // Only handle cursor movement when not locked
+        if !self.cursor_locked {
+            // Pass raw cursor position to EventSystem
+            if let Some(event_system) = &self.event_system {
+                event_system.receive_native_mouse_event(&(x, y));
             }
         }
-
-        self.input_state.last_mouse_pos = Some(current_pos);
     }
 }
 
@@ -211,7 +98,7 @@ impl ApplicationHandler for App {
     ) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                self.handle_device_mouse_motion(delta.0, delta.1);
+                self.handle_device_mouse_motion(delta);
             }
             _ => {}
         }
@@ -260,7 +147,10 @@ impl ApplicationHandler for App {
                 })
             };
 
-            let program = Program::new(gl).expect("Failed to create graphics program");
+            // Create EventSystem with DesktopEventHandler
+            let event_system = EventSystem::new(Box::new(DesktopEventHandler::new()));
+            
+            let program = Program::new(gl, event_system).expect("Failed to create graphics program");
 
             // Initialize timing
             let now = Instant::now();
@@ -330,14 +220,11 @@ impl ApplicationHandler for App {
                 self.handle_keyboard_input(event);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // Only handle cursor movement when not locked
-                if !self.input_state.cursor_locked {
-                    self.handle_mouse_movement(position.x, position.y);
-                }
+                self.handle_mouse_movement(position.x, position.y);
             }
             WindowEvent::MouseInput { state: ElementState::Pressed, .. } => {
                 // Lock cursor on mouse click
-                if !self.input_state.cursor_locked {
+                if !self.cursor_locked {
                     self.lock_cursor();
                 }
             }
@@ -362,9 +249,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         gl_context: None,
         gl_surface: None,
         program: None,
+        event_system: None,
         start_time: None,
         last_frame_time: None,
-        input_state: InputState::new(),
+        cursor_locked: false,
     };
 
     event_loop.run_app(&mut app)?;

@@ -35,19 +35,23 @@ mod game_state {
 use assets_manager::{ initialize_asset_manager, get_static_object_copy, get_animated_object_copy, Assets };
 use game_state::{initialize_game_state, get_camera_transform};
 
-pub mod event_system {
-    include!("engine/systems/EventSystem.rs");
-}
+#[path = "engine/mod.rs"]
+pub mod engine;
 
 pub mod movement_listeners {
     include!("game/listeners/MovementsListeners.rs");
 }
 
-use event_system::EventSystem;
 use movement_listeners::{ MovementListener, CameraRotationListener };
 
 // Re-export for platform-specific builds
-pub use event_system::{Event, EventType};
+pub use engine::eventSystem::{Event, EventType, EventSystem};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use engine::eventSystem::DesktopEventHandler;
+
+#[cfg(target_arch = "wasm32")]
+pub use engine::eventSystem::BrowserEventHandler;
 
 // === MAIN PROGRAM ===
 
@@ -59,7 +63,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(gl: glow::Context) -> Result<Self, String> {
+    pub fn new(gl: glow::Context, mut event_system: EventSystem) -> Result<Self, String> {
         initialize_asset_manager(&gl);
         initialize_game_state();
 
@@ -71,10 +75,8 @@ impl Program {
         animated_object.transform.translate(-2.0, -3.0, -5.0);
         static_object.transform.translate(2.0, -3.0, -5.0);
 
-        let mut event_system = EventSystem::new();
-
-        event_system.subscribe(event_system::EventType::Move, Box::new(MovementListener));
-        event_system.subscribe(event_system::EventType::RotateCamera, Box::new(CameraRotationListener));
+        event_system.subscribe(EventType::Move, Box::new(MovementListener));
+        event_system.subscribe(EventType::RotateCamera, Box::new(CameraRotationListener));
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
@@ -125,7 +127,7 @@ impl Program {
         Ok(())
     }
 
-    pub fn receive_event(&mut self, event: &event_system::Event) {
+    pub fn receive_event(&mut self, event: &Event) {
         self.event_system.notify(event);
     }
 

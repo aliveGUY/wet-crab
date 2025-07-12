@@ -1,0 +1,2 @@
+**The Event System** combines two design patterns—Observer and Bridge—to enable flexible and cross-platform event handling. Systems can subscribe to specific events, such as application-level triggers, while also responding to native events like button presses. To ensure seamless cross-platform compatibility and abstraction over native event implementations, the Bridge pattern is used alongside the Observer pattern's publish-subscribe mechanism.
+
