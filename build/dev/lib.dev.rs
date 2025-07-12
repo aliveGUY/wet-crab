@@ -1,18 +1,18 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{ HtmlCanvasElement, WebGl2RenderingContext };
+use web_sys::{ HtmlCanvasElement, WebGl2RenderingContext, KeyboardEvent, MouseEvent };
 use glow::Context;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 mod index;
-use index::{ Program };
-use index::engine::eventSystem::{EventSystem, BrowserEventHandler, NativeEventHandler};
+use index::Program;
+use index::engine::eventSystem::{ BrowserEventHandler, EventSystem };
 
 struct RenderState {
     program: Program,
     canvas: HtmlCanvasElement,
-    event_handler: Rc<BrowserEventHandler>,
+    event_system: Rc<RefCell<EventSystem>>,
     start_time: f64,
     last_frame_time: f64,
 }
@@ -28,8 +28,10 @@ pub fn run() {
 }
 
 fn start_render_loop() -> Result<(), JsValue> {
-    let doc = web_sys::window().unwrap().document().unwrap();
-    let canvas = doc
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+
+    let canvas = document
         .get_element_by_id("webgl-canvas")
         .ok_or("Canvas not found")?
         .dyn_into::<HtmlCanvasElement>()?;
@@ -41,107 +43,29 @@ fn start_render_loop() -> Result<(), JsValue> {
 
     let gl = Context::from_webgl2_context(context);
 
-    // Create EventSystem with BrowserEventHandler
-    let event_handler = Rc::new(BrowserEventHandler::new());
-    let event_system = EventSystem::new(Box::new(BrowserEventHandler::new()));
-    
-    let program = Program::new(gl, event_system).map_err(|e| JsValue::from_str(&e))?;
+    let event_system = Rc::new(
+        RefCell::new(EventSystem::new(Box::new(BrowserEventHandler::new())))
+    );
+
+    let program = Program::new(gl, event_system.clone()).map_err(|e| JsValue::from_str(&e))?;
 
     let render_state = Rc::new(
         RefCell::new(RenderState {
             program,
             canvas,
-            event_handler,
-            start_time: 0.0, // Will be set on first frame
+            event_system: event_system.clone(),
+            start_time: 0.0,
             last_frame_time: 0.0,
         })
     );
 
-    // Setup input event listeners
-    setup_input_listeners(render_state.clone())?;
-
-    // Start the animation loop
-    request_animation_frame(render_state.clone())?;
-
-    log("🔺 Continuous rendering loop started!");
-    Ok(())
-}
-
-fn request_animation_frame(render_state: Rc<RefCell<RenderState>>) -> Result<(), JsValue> {
-    let render_state_clone = render_state.clone();
-
-    let closure = Closure::wrap(
-        Box::new(move |current_time: f64| {
-            let mut state = render_state_clone.borrow_mut();
-
-            // Initialize start time on first frame
-            if state.start_time == 0.0 {
-                state.start_time = current_time;
-                state.last_frame_time = current_time;
-            }
-
-            // Calculate elapsed time in seconds
-            let elapsed_time = ((current_time - state.start_time) / 1000.0) as f32;
-
-            state.last_frame_time = current_time;
-
-            // Get canvas dimensions before mutable borrow
-            let canvas_width = state.canvas.width();
-            let canvas_height = state.canvas.height();
-
-            // Render frame
-            if let Err(e) = state.program.render(canvas_width, canvas_height, elapsed_time) {
-                web_sys::console::error_1(&format!("Render error: {}", e).into());
-                return;
-            }
-
-            // Request next frame
-            drop(state); // Release borrow before recursive call
-            if let Err(e) = request_animation_frame(render_state.clone()) {
-                web_sys::console::error_1(&e);
-            }
-        }) as Box<dyn FnMut(f64)>
-    );
-
-    web_sys::window().unwrap().request_animation_frame(closure.as_ref().unchecked_ref())?;
-
-    closure.forget(); // Keep closure alive
-    Ok(())
-}
-
-fn setup_input_listeners(render_state: Rc<RefCell<RenderState>>) -> Result<(), JsValue> {
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
-
-    // Keyboard event listeners
     {
-        let render_state_clone = render_state.clone();
-        let keydown_closure = Closure::wrap(
-            Box::new(move |event: web_sys::KeyboardEvent| {
-                let state = render_state_clone.borrow();
-                let key_code = event.code();
-
-                match key_code.as_str() {
-                    "Escape" => {
-                        // Unlock cursor on ESC
-                        let document = web_sys::window().unwrap().document().unwrap();
-                        let _ = document.exit_pointer_lock();
-                        state.event_handler.set_cursor_locked(false);
-                        log("🔓 Cursor unlocked");
-                    }
-                    "KeyW" | "KeyA" | "KeyS" | "KeyD" => {
-                        // Pass raw keyboard event to EventSystem
-                        if let Some(parsed_event) = state.event_handler.parse_keyboard_event(&event) {
-                            drop(state); // Release borrow
-                            let mut state = render_state_clone.borrow_mut();
-                            state.program.receive_event(&parsed_event);
-                        }
-                    }
-                    _ => {}
-                }
-            }) as Box<dyn FnMut(web_sys::KeyboardEvent)>
+        let es = event_system.clone();
+        let keydown_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
+            Box::new(move |ke: KeyboardEvent| {
+                es.borrow().receive_native_keyboard_event(&ke);
+            })
         );
-
         document.add_event_listener_with_callback(
             "keydown",
             keydown_closure.as_ref().unchecked_ref()
@@ -150,93 +74,23 @@ fn setup_input_listeners(render_state: Rc<RefCell<RenderState>>) -> Result<(), J
     }
 
     {
-        let render_state_clone = render_state.clone();
-        let keyup_closure = Closure::wrap(
-            Box::new(move |event: web_sys::KeyboardEvent| {
-                let state = render_state_clone.borrow();
-                let key_code = event.code();
-
-                if matches!(key_code.as_str(), "KeyW" | "KeyA" | "KeyS" | "KeyD") {
-                    // Pass raw keyboard event to EventSystem
-                    if let Some(parsed_event) = state.event_handler.parse_keyboard_event(&event) {
-                        drop(state); // Release borrow
-                        let mut state = render_state_clone.borrow_mut();
-                        state.program.receive_event(&parsed_event);
-                    }
-                }
-            }) as Box<dyn FnMut(web_sys::KeyboardEvent)>
+        let es = event_system.clone();
+        let keyup_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
+            Box::new(move |ke: KeyboardEvent| {
+                es.borrow().receive_native_keyboard_event(&ke);
+            })
         );
-
         document.add_event_listener_with_callback("keyup", keyup_closure.as_ref().unchecked_ref())?;
         keyup_closure.forget();
     }
 
-    // Canvas click handler for pointer lock
     {
-        let render_state_clone = render_state.clone();
-        let canvas_click_closure = Closure::wrap(
-            Box::new(move |_event: web_sys::MouseEvent| {
-                let state = render_state_clone.borrow();
-                let _ = state.canvas.request_pointer_lock();
-            }) as Box<dyn FnMut(web_sys::MouseEvent)>
+        let es = event_system.clone();
+        let mousemove_closure = Closure::<dyn FnMut(MouseEvent)>::wrap(
+            Box::new(move |me: MouseEvent| {
+                es.borrow().receive_native_mouse_event(&me);
+            })
         );
-
-        render_state
-            .borrow()
-            .canvas.add_event_listener_with_callback(
-                "click",
-                canvas_click_closure.as_ref().unchecked_ref()
-            )?;
-        canvas_click_closure.forget();
-    }
-
-    // Pointer lock change event listener
-    {
-        let render_state_clone = render_state.clone();
-        let pointer_lock_change_closure = Closure::wrap(
-            Box::new(move |_event: web_sys::Event| {
-                let state = render_state_clone.borrow();
-                let document = web_sys::window().unwrap().document().unwrap();
-
-                // Check if pointer is locked to our canvas
-                if let Some(locked_element) = document.pointer_lock_element() {
-                    if locked_element == state.canvas.clone().into() {
-                        state.event_handler.set_cursor_locked(true);
-                        log("🔒 Cursor locked - use ESC to unlock");
-                    } else {
-                        state.event_handler.set_cursor_locked(false);
-                        log("🔓 Cursor unlocked");
-                    }
-                } else {
-                    state.event_handler.set_cursor_locked(false);
-                    log("🔓 Cursor unlocked");
-                }
-            }) as Box<dyn FnMut(web_sys::Event)>
-        );
-
-        document.add_event_listener_with_callback(
-            "pointerlockchange",
-            pointer_lock_change_closure.as_ref().unchecked_ref()
-        )?;
-        pointer_lock_change_closure.forget();
-    }
-
-    // Mouse event listener
-    {
-        let render_state_clone = render_state.clone();
-        let mousemove_closure = Closure::wrap(
-            Box::new(move |event: web_sys::MouseEvent| {
-                let state = render_state_clone.borrow();
-                
-                // Pass raw mouse event to EventSystem
-                if let Some(parsed_event) = state.event_handler.parse_mouse_event(&event) {
-                    drop(state); // Release borrow
-                    let mut state = render_state_clone.borrow_mut();
-                    state.program.receive_event(&parsed_event);
-                }
-            }) as Box<dyn FnMut(web_sys::MouseEvent)>
-        );
-
         document.add_event_listener_with_callback(
             "mousemove",
             mousemove_closure.as_ref().unchecked_ref()
@@ -244,7 +98,37 @@ fn setup_input_listeners(render_state: Rc<RefCell<RenderState>>) -> Result<(), J
         mousemove_closure.forget();
     }
 
-    log("🎮 Input event listeners setup complete!");
+    request_animation_frame(render_state)?;
+
+    log("🔺 Continuous rendering loop started!");
+    Ok(())
+}
+
+fn request_animation_frame(state_rc: Rc<RefCell<RenderState>>) -> Result<(), JsValue> {
+    let cb = Closure::<dyn FnMut(f64)>::wrap(
+        Box::new(move |now_ms| {
+            let mut state = state_rc.borrow_mut();
+
+            if state.start_time == 0.0 {
+                state.start_time = now_ms;
+                state.last_frame_time = now_ms;
+            }
+
+            let elapsed = ((now_ms - state.start_time) / 1000.0) as f32;
+            state.last_frame_time = now_ms;
+
+            let (w, h) = (state.canvas.width(), state.canvas.height());
+            if let Err(e) = state.program.render(w, h, elapsed) {
+                web_sys::console::error_1(&format!("Render error: {e}").into());
+                return;
+            }
+
+            let _ = request_animation_frame(state_rc.clone());
+        })
+    );
+
+    web_sys::window().unwrap().request_animation_frame(cb.as_ref().unchecked_ref())?;
+    cb.forget();
     Ok(())
 }
 

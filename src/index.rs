@@ -1,4 +1,6 @@
 use glow::HasContext;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 mod math {
     include!("engine/utils/math.rs");
@@ -32,8 +34,13 @@ mod game_state {
     include!("game/gloabals/GameState.rs");
 }
 
-use assets_manager::{ initialize_asset_manager, get_static_object_copy, get_animated_object_copy, Assets };
-use game_state::{initialize_game_state, get_camera_transform};
+use assets_manager::{
+    initialize_asset_manager,
+    get_static_object_copy,
+    get_animated_object_copy,
+    Assets,
+};
+use game_state::{ initialize_game_state, get_camera_transform };
 
 #[path = "engine/mod.rs"]
 pub mod engine;
@@ -45,7 +52,7 @@ pub mod movement_listeners {
 use movement_listeners::{ MovementListener, CameraRotationListener };
 
 // Re-export for platform-specific builds
-pub use engine::eventSystem::{Event, EventType, EventSystem};
+pub use engine::eventSystem::{ Event, EventType, EventSystem };
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use engine::eventSystem::DesktopEventHandler;
@@ -59,11 +66,11 @@ pub struct Program {
     gl: glow::Context,
     animated_object: AnimatedObject3D,
     static_object: StaticObject3D,
-    event_system: EventSystem,
+    event_system: Rc<RefCell<EventSystem>>,
 }
 
 impl Program {
-    pub fn new(gl: glow::Context, mut event_system: EventSystem) -> Result<Self, String> {
+    pub fn new(gl: glow::Context, event_system: Rc<RefCell<EventSystem>>) -> Result<Self, String> {
         initialize_asset_manager(&gl);
         initialize_game_state();
 
@@ -75,8 +82,11 @@ impl Program {
         animated_object.transform.translate(-2.0, -3.0, -5.0);
         static_object.transform.translate(2.0, -3.0, -5.0);
 
-        event_system.subscribe(EventType::Move, Box::new(MovementListener));
-        event_system.subscribe(EventType::RotateCamera, Box::new(CameraRotationListener));
+        {
+            let mut es = event_system.borrow_mut();
+            es.subscribe(EventType::Move, Box::new(MovementListener));
+            es.subscribe(EventType::RotateCamera, Box::new(CameraRotationListener));
+        }
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
@@ -100,25 +110,20 @@ impl Program {
             self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
-            // Create projection matrix
             let fov = (90.0_f32).to_radians();
             let aspect_ratio = (width as f32) / (height as f32);
             let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
 
-            // Get camera transform (view matrix)
             let view_matrix = get_camera_transform();
 
-            // Combine projection and view matrices for final viewport transform
             let viewport_txfm = mat4x4_mul(projection_matrix, view_matrix);
 
-            // Set viewport transform for both objects (they handle their own shaders)
             self.setup_viewport_uniform(
                 &viewport_txfm,
                 self.animated_object.material.shader_program
             );
             self.setup_viewport_uniform(&viewport_txfm, self.static_object.material.shader_program);
 
-            // Render objects - they handle their own shader binding and uniforms
             self.animated_object.render(&self.gl);
             self.static_object.render(&self.gl);
 
@@ -127,25 +132,19 @@ impl Program {
         Ok(())
     }
 
-    pub fn receive_event(&mut self, event: &Event) {
-        self.event_system.notify(event);
-    }
-
     fn setup_viewport_uniform(&self, viewport_txfm: &[f32; 16], shader_program: glow::Program) {
         unsafe {
             self.gl.use_program(Some(shader_program));
 
-            // Set viewport transform
             if let Some(loc) = self.gl.get_uniform_location(shader_program, "viewport_txfm") {
                 self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, viewport_txfm);
             }
 
-            // Set texture uniforms
             if let Some(loc) = self.gl.get_uniform_location(shader_program, "baseColorTexture") {
-                self.gl.uniform_1_i32(Some(&loc), 0); // Texture unit 0
+                self.gl.uniform_1_i32(Some(&loc), 0);
             }
             if let Some(loc) = self.gl.get_uniform_location(shader_program, "hasTexture") {
-                self.gl.uniform_1_i32(Some(&loc), 1); // Both objects have textures
+                self.gl.uniform_1_i32(Some(&loc), 1);
             }
         }
     }

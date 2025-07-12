@@ -5,238 +5,153 @@ use glutin::prelude::*;
 use glutin::surface::{ SurfaceAttributesBuilder, WindowSurface };
 use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasWindowHandle;
+use std::cell::RefCell;
 use std::num::NonZeroU32;
+use std::rc::Rc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{ WindowEvent, KeyEvent, ElementState, DeviceEvent };
+use winit::event::{ ElementState, KeyEvent, WindowEvent };
 use winit::event_loop::{ ActiveEventLoop, EventLoop };
-use winit::window::{ Window, WindowId, CursorGrabMode };
 use winit::keyboard::{ KeyCode, PhysicalKey };
+use winit::window::{ Window, WindowId };
 
 mod index;
-use index::{ Program };
-use index::engine::eventSystem::{EventSystem, DesktopEventHandler};
+use index::Program;
+use index::engine::eventSystem::{ DesktopEventHandler, EventSystem };
 
 struct App {
     window: Option<Window>,
     gl_context: Option<glutin::context::PossiblyCurrentContext>,
     gl_surface: Option<glutin::surface::Surface<WindowSurface>>,
     program: Option<Program>,
-    event_system: Option<EventSystem>,
+    event_system: Option<Rc<RefCell<EventSystem>>>,
     start_time: Option<Instant>,
     last_frame_time: Option<Instant>,
-    cursor_locked: bool,
 }
 
-impl App {
-    fn handle_keyboard_input(&mut self, event: KeyEvent) {
-        if let PhysicalKey::Code(key_code) = event.physical_key {
-            match key_code {
-                KeyCode::Escape => {
-                    if event.state == ElementState::Pressed {
-                        self.unlock_cursor();
-                    }
-                }
-                KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD => {
-                    // Pass raw keyboard event to EventSystem
-                    if let Some(event_system) = &self.event_system {
-                        event_system.receive_native_keyboard_event(&event);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn lock_cursor(&mut self) {
-        if let Some(window) = &self.window {
-            if let Ok(()) = window.set_cursor_grab(CursorGrabMode::Confined) {
-                window.set_cursor_visible(false);
-                self.cursor_locked = true;
-                println!("🔒 Cursor locked - use ESC to unlock");
-            }
-        }
-    }
-
-    fn unlock_cursor(&mut self) {
-        if let Some(window) = &self.window {
-            let _ = window.set_cursor_grab(CursorGrabMode::None);
-            window.set_cursor_visible(true);
-            self.cursor_locked = false;
-            println!("🔓 Cursor unlocked");
-        }
-    }
-
-    fn handle_device_mouse_motion(&mut self, delta: (f64, f64)) {
-        // Only process if cursor is locked
-        if self.cursor_locked {
-            // Pass raw device event to EventSystem
-            if let Some(event_system) = &self.event_system {
-                let device_event = DeviceEvent::MouseMotion { delta };
-                event_system.receive_native_mouse_event(&device_event);
-            }
-        }
-    }
-
-    fn handle_mouse_movement(&mut self, x: f64, y: f64) {
-        // Only handle cursor movement when not locked
-        if !self.cursor_locked {
-            // Pass raw cursor position to EventSystem
-            if let Some(event_system) = &self.event_system {
-                event_system.receive_native_mouse_event(&(x, y));
-            }
-        }
-    }
-}
 
 impl ApplicationHandler for App {
-    fn device_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
-        event: DeviceEvent
-    ) {
-        match event {
-            DeviceEvent::MouseMotion { delta } => {
-                self.handle_device_mouse_motion(delta);
-            }
-            _ => {}
-        }
-    }
-
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            let window_attributes =
-                Window::default_attributes().with_title("Native OpenGL Triangle");
-
-            let window = event_loop.create_window(window_attributes).unwrap();
-
-            let display_builder = DisplayBuilder::new();
-
-            let (_, gl_config) = display_builder
-                .build(event_loop, ConfigTemplateBuilder::new(), |mut configs| {
-                    configs.next().unwrap()
-                })
-                .unwrap();
-
-            let raw_display = gl_config.display();
-
-            let context_attributes = ContextAttributesBuilder::new()
-                .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
-                .build(Some(window.window_handle().unwrap().as_raw()));
-
-            let not_current_gl_context = unsafe {
-                raw_display.create_context(&gl_config, &context_attributes).unwrap()
-            };
-
-            let attrs = SurfaceAttributesBuilder::<WindowSurface>
-                ::new()
-                .build(
-                    window.window_handle().unwrap().as_raw(),
-                    NonZeroU32::new(800).unwrap(),
-                    NonZeroU32::new(600).unwrap()
-                );
-
-            let surface = unsafe { raw_display.create_window_surface(&gl_config, &attrs).unwrap() };
-
-            let gl_context = not_current_gl_context.make_current(&surface).unwrap();
-
-            let gl = unsafe {
-                glow::Context::from_loader_function(|s| {
-                    raw_display.get_proc_address(&std::ffi::CString::new(s).unwrap()) as *const _
-                })
-            };
-
-            // Create EventSystem with DesktopEventHandler
-            let event_system = EventSystem::new(Box::new(DesktopEventHandler::new()));
-            
-            let program = Program::new(gl, event_system).expect("Failed to create graphics program");
-
-            // Initialize timing
-            let now = Instant::now();
-            self.start_time = Some(now);
-            self.last_frame_time = Some(now);
-
-            window.request_redraw();
-
-            self.window = Some(window);
-            self.gl_context = Some(gl_context);
-            self.gl_surface = Some(surface);
-            self.program = Some(program);
+        if self.window.is_some() {
+            return;
         }
+
+        let window = event_loop
+            .create_window(Window::default_attributes().with_title("Bridge-pattern GL demo"))
+            .unwrap();
+
+        let display_builder = DisplayBuilder::new();
+        let (_, gl_config) = display_builder
+            .build(event_loop, ConfigTemplateBuilder::new(), |mut c| c.next().unwrap())
+            .unwrap();
+
+        let display = gl_config.display();
+        let ctx_attrs = ContextAttributesBuilder::new()
+            .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
+            .build(Some(window.window_handle().unwrap().as_raw()));
+
+        let not_current = unsafe { display.create_context(&gl_config, &ctx_attrs).unwrap() };
+
+        let attrs = SurfaceAttributesBuilder::<WindowSurface>
+            ::new()
+            .build(
+                window.window_handle().unwrap().as_raw(),
+                NonZeroU32::new(800).unwrap(),
+                NonZeroU32::new(600).unwrap()
+            );
+        let surface = unsafe { display.create_window_surface(&gl_config, &attrs).unwrap() };
+        let ctx = not_current.make_current(&surface).unwrap();
+
+        let gl = unsafe {
+            glow::Context::from_loader_function(|s| {
+                display.get_proc_address(&std::ffi::CString::new(s).unwrap()) as *const _
+            })
+        };
+
+        let event_system = Rc::new(
+            RefCell::new(EventSystem::new(Box::new(DesktopEventHandler::new())))
+        );
+
+        let program = Program::new(gl, event_system.clone()).expect(
+            "Failed to create graphics program"
+        );
+
+        let now = Instant::now();
+        self.start_time = Some(now);
+        self.last_frame_time = Some(now);
+
+        window.request_redraw();
+
+        self.window = Some(window);
+        self.gl_context = Some(ctx);
+        self.gl_surface = Some(surface);
+        self.program = Some(program);
+        self.event_system = Some(event_system);
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent
-    ) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
+            WindowEvent::CloseRequested => event_loop.exit(),
+
             WindowEvent::RedrawRequested => {
                 if
-                    let (Some(surface), Some(context), Some(program)) = (
+                    let (Some(surface), Some(ctx), Some(prog)) = (
                         &self.gl_surface,
                         &self.gl_context,
                         &mut self.program,
                     )
                 {
                     if let Some(window) = &self.window {
-                        let current_time = Instant::now();
-
-                        // Calculate elapsed time since start
-                        let elapsed_time = if let Some(start_time) = self.start_time {
-                            current_time.duration_since(start_time).as_secs_f32()
-                        } else {
-                            0.0
-                        };
-
-                        // Update last frame time
-                        self.last_frame_time = Some(current_time);
+                        let t_now = Instant::now();
+                        let elapsed = self.start_time
+                            .map(|s| (t_now - s).as_secs_f32())
+                            .unwrap_or(0.0);
+                        self.last_frame_time = Some(t_now);
 
                         let size = window.inner_size();
-                        program
-                            .render(size.width, size.height, elapsed_time)
-                            .expect("Failed to render triangle");
+                        prog.render(size.width, size.height, elapsed).expect("render failed");
                     }
+                    surface.swap_buffers(ctx).unwrap();
 
-                    surface.swap_buffers(context).unwrap();
-
-                    // Request continuous rendering
                     if let Some(window) = &self.window {
                         window.request_redraw();
                     }
                 }
             }
+
             WindowEvent::Resized(_) => {
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+                if let Some(w) = &self.window {
+                    w.request_redraw();
                 }
             }
+
             WindowEvent::KeyboardInput { event, .. } => {
-                self.handle_keyboard_input(event);
+                if let Some(es_rc) = &self.event_system {
+                    // Handle ESC for exit
+                    if let PhysicalKey::Code(KeyCode::Escape) = event.physical_key {
+                        if event.state == ElementState::Pressed {
+                            println!("ESC pressed – exiting");
+                        }
+                    }
+                    // Pass all events to EventSystem
+                    es_rc.borrow().receive_native_keyboard_event(&event);
+                }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.handle_mouse_movement(position.x, position.y);
-            }
-            WindowEvent::MouseInput { state: ElementState::Pressed, .. } => {
-                // Lock cursor on mouse click
-                if !self.cursor_locked {
-                    self.lock_cursor();
+                if let Some(es_rc) = &self.event_system {
+                    es_rc.borrow().receive_native_mouse_event(&position);
                 }
             }
-            _ => (),
+
+            _ => {}
         }
     }
 }
 
 impl Drop for App {
     fn drop(&mut self) {
-        if let Some(program) = &self.program {
-            program.cleanup();
+        if let Some(p) = &self.program {
+            p.cleanup();
         }
     }
 }
@@ -252,7 +167,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         event_system: None,
         start_time: None,
         last_frame_time: None,
-        cursor_locked: false,
     };
 
     event_loop.run_app(&mut app)?;
