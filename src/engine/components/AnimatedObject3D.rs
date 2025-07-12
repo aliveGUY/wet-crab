@@ -55,9 +55,42 @@ impl AnimatedObject3D {
 
         // Update animation
         {
-            let animation_channels = &self.animation_channels.clone();
-            let skeleton = &mut self.skeleton;
-            self.animator.update_with_data(animation_channels, skeleton);
+            // Convert to the types expected by the animator
+            let animation_channels: Vec<crate::index::animated_object3d::AnimationChannel> = 
+                self.animation_channels.iter().map(|ch| crate::index::animated_object3d::AnimationChannel {
+                    target: ch.target,
+                    animation_type: match ch.animation_type {
+                        AnimationType::Translation => crate::index::animated_object3d::AnimationType::Translation,
+                        AnimationType::Rotation => crate::index::animated_object3d::AnimationType::Rotation,
+                        AnimationType::Scale => crate::index::animated_object3d::AnimationType::Scale,
+                    },
+                    num_timesteps: ch.num_timesteps,
+                    times: ch.times.clone(),
+                    data: ch.data.clone(),
+                }).collect();
+            
+            // Convert skeleton to the expected type
+            let mut skeleton_converted = crate::index::animated_object3d::Skeleton {
+                nodes: self.skeleton.nodes.iter().map(|n| crate::index::animated_object3d::Node {
+                    translation: n.translation,
+                    rotation: n.rotation,
+                    scale: n.scale,
+                    parent: n.parent,
+                }).collect(),
+                joint_ids: self.skeleton.joint_ids.clone(),
+                joint_inverse_mats: self.skeleton.joint_inverse_mats.clone(),
+            };
+            
+            self.animator.update_with_data(&animation_channels[..], &mut skeleton_converted);
+            
+            // Copy back the updated nodes
+            for (i, node) in skeleton_converted.nodes.iter().enumerate() {
+                if i < self.skeleton.nodes.len() {
+                    self.skeleton.nodes[i].translation = node.translation;
+                    self.skeleton.nodes[i].rotation = node.rotation;
+                    self.skeleton.nodes[i].scale = node.scale;
+                }
+            }
         }
 
         // Bind material (texture)
@@ -79,7 +112,15 @@ impl AnimatedObject3D {
                     break;
                 }
                 inverse_bone_matrices[i] = self.skeleton.joint_inverse_mats[i];
-                bone_matrices[i] = node_world_txfm(&self.skeleton.nodes, joint_id as usize);
+                // Convert nodes to the expected type for the math function
+                let nodes_converted: Vec<crate::index::animated_object3d::Node> = 
+                    self.skeleton.nodes.iter().map(|n| crate::index::animated_object3d::Node {
+                        translation: n.translation,
+                        rotation: n.rotation,
+                        scale: n.scale,
+                        parent: n.parent,
+                    }).collect();
+                bone_matrices[i] = node_world_txfm(&nodes_converted[..], joint_id as usize);
             }
 
             // Upload world transform uniform

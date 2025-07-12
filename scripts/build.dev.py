@@ -111,6 +111,14 @@ def main():
         shutil.copyfile(SRC_TOML, DEST_TOML)
 
         subprocess.run(["wasm-pack", "build", "--target", "web"], check=True)
+        
+        # Copy pkg directory to build/dev so the server can serve WASM files
+        pkg_src = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "pkg"))
+        pkg_dest = os.path.join(BUILD_DIR, "pkg")
+        if os.path.exists(pkg_dest):
+            shutil.rmtree(pkg_dest)
+        shutil.copytree(pkg_src, pkg_dest)
+        info("📦 Copied WASM files to build directory")
 
         info(f"🔍 Проверяем, свободен ли порт {PORT}...")
         kill_existing_server(PORT)

@@ -1,24 +1,85 @@
-use crate::index::event_system::{Event, EventListener};
+use crate::index::engine::systems::{ Event, EventListener };
+use crate::index::game_state::{
+    add_camera_rotation_delta,
+    move_camera_forward,
+    move_camera_back,
+    move_camera_right,
+    move_camera_left,
+    move_camera_forward_left,
+    move_camera_forward_right,
+    move_camera_back_left,
+    move_camera_back_right,
+};
 
+#[derive(Debug)]
 pub struct CameraRotationListener;
+
+#[derive(Debug)]
 pub struct MovementListener;
 
 impl EventListener for CameraRotationListener {
     fn update(&self, event: &Event) {
-        if let Some(quaternion) = event.payload.downcast_ref::<[f32; 4]>() {
-            println!("Rotating camera with quaternion: {:?}", quaternion);
-        } else {
-            println!("CameraRotationListener received incompatible payload.");
+        if let Some([pitch_delta, yaw_delta]) = event.payload.downcast_ref::<[f32; 2]>() {
+            add_camera_rotation_delta(*pitch_delta, *yaw_delta);
         }
     }
 }
 
 impl EventListener for MovementListener {
     fn update(&self, event: &Event) {
-        if let Some(direction) = event.payload.downcast_ref::<String>() {
-            println!("Moving in direction: {}", direction);
-        } else {
-            println!("MovementListener received incompatible payload.");
+        let dir_text = match event.payload.downcast_ref::<String>() {
+            Some(s) => s.as_str(),
+            None => {
+                return;
+            }
+        };
+
+        let mut fwd = false;
+        let mut back = false;
+        let mut left = false;
+        let mut right = false;
+
+        for token in dir_text.split('-') {
+            match token {
+                "forward" => {
+                    fwd = true;
+                }
+                "backward" => {
+                    back = true;
+                }
+                "left" => {
+                    left = true;
+                }
+                "right" => {
+                    right = true;
+                }
+                _ => {}
+            }
+        }
+
+        if fwd && back {
+            fwd = false;
+            back = false;
+        }
+        if left && right {
+            left = false;
+            right = false;
+        }
+
+        const STEP: f32 = 0.1;
+
+        match (fwd, back, left, right) {
+            (true, false, false, false) => move_camera_forward(STEP),
+            (false, true, false, false) => move_camera_back(STEP),
+            (false, false, false, true) => move_camera_right(STEP),
+            (false, false, true, false) => move_camera_left(STEP),
+
+            (true, false, true, false) => move_camera_forward_left(STEP),
+            (true, false, false, true) => move_camera_forward_right(STEP),
+            (false, true, true, false) => move_camera_back_left(STEP),
+            (false, true, false, true) => move_camera_back_right(STEP),
+
+            _ => {}
         }
     }
 }

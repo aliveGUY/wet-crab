@@ -28,21 +28,35 @@ mod assets_manager {
     include!("engine/managers/AssetsManager.rs");
 }
 
-use assets_manager::{ initialize, get_static_object_copy, get_animated_object_copy, Assets };
-
-pub mod event_system {
-    include!("engine/systems/EventSystem.rs");
+mod game_state {
+    include!("game/gloabals/GameState.rs");
 }
+
+use assets_manager::{
+    initialize_asset_manager,
+    get_static_object_copy,
+    get_animated_object_copy,
+    Assets,
+};
+use game_state::{ initialize_game_state, get_camera_transform };
+
+#[path = "engine/mod.rs"]
+pub mod engine;
 
 pub mod movement_listeners {
     include!("game/listeners/MovementsListeners.rs");
 }
 
-use event_system::EventSystem;
-use movement_listeners::{MovementListener, CameraRotationListener};
+use movement_listeners::{ MovementListener, CameraRotationListener };
 
 // Re-export for platform-specific builds
-pub use event_system::{Event, EventType};
+pub use engine::systems::{ Event, EventType, EventSystem };
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use engine::systems::DesktopInputHandler;
+
+#[cfg(target_arch = "wasm32")]
+pub use engine::systems::BrowserInputHandler;
 
 // === MAIN PROGRAM ===
 
@@ -50,12 +64,12 @@ pub struct Program {
     gl: glow::Context,
     animated_object: AnimatedObject3D,
     static_object: StaticObject3D,
-    event_system: EventSystem,
 }
 
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
-        initialize(&gl);
+        initialize_asset_manager(&gl);
+        initialize_game_state();
 
         // Load objects with correct types
         let mut animated_object = get_animated_object_copy(Assets::TestingDoll);
@@ -65,24 +79,23 @@ impl Program {
         animated_object.transform.translate(-2.0, -3.0, -5.0);
         static_object.transform.translate(2.0, -3.0, -5.0);
 
-        let mut event_system = EventSystem::new();
-
-        event_system.subscribe(event_system::EventType::Move, Box::new(MovementListener));
-        event_system.subscribe(event_system::EventType::RotateCamera, Box::new(CameraRotationListener));
+        // Subscribe to events using clean singleton
+        use std::sync::Arc;
+        EventSystem::subscribe(EventType::Move, Arc::new(MovementListener));
+        EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationListener));
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
         }
 
         println!(
-            "✅ Program initialized successfully with shared components and shader-in-material architecture"
+            "✅ Program initialized successfully with refactored global event system architecture"
         );
 
         Ok(Self {
             gl,
             animated_object,
             static_object,
-            event_system,
         })
     }
 
@@ -94,16 +107,14 @@ impl Program {
 
             let fov = (90.0_f32).to_radians();
             let aspect_ratio = (width as f32) / (height as f32);
-            let viewport_txfm = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
+            let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
 
-            // Set viewport transform for both objects (they handle their own shaders)
-            self.setup_viewport_uniform(
-                &viewport_txfm,
-                self.animated_object.material.shader_program
-            );
-            self.setup_viewport_uniform(&viewport_txfm, self.static_object.material.shader_program);
+            let view_matrix = get_camera_transform();
+            let view_proj = mat4x4_mul(projection_matrix, view_matrix);
 
-            // Render objects - they handle their own shader binding and uniforms
+            self.setup_viewport_uniform(&view_proj, self.animated_object.material.shader_program);
+            self.setup_viewport_uniform(&view_proj, self.static_object.material.shader_program);
+
             self.animated_object.render(&self.gl);
             self.static_object.render(&self.gl);
 
@@ -112,25 +123,19 @@ impl Program {
         Ok(())
     }
 
-    pub fn receive_event(&mut self, event: &event_system::Event) {
-        self.event_system.notify(event);
-    }
-
     fn setup_viewport_uniform(&self, viewport_txfm: &[f32; 16], shader_program: glow::Program) {
         unsafe {
             self.gl.use_program(Some(shader_program));
 
-            // Set viewport transform
             if let Some(loc) = self.gl.get_uniform_location(shader_program, "viewport_txfm") {
                 self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, viewport_txfm);
             }
 
-            // Set texture uniforms
             if let Some(loc) = self.gl.get_uniform_location(shader_program, "baseColorTexture") {
-                self.gl.uniform_1_i32(Some(&loc), 0); // Texture unit 0
+                self.gl.uniform_1_i32(Some(&loc), 0);
             }
             if let Some(loc) = self.gl.get_uniform_location(shader_program, "hasTexture") {
-                self.gl.uniform_1_i32(Some(&loc), 1); // Both objects have textures
+                self.gl.uniform_1_i32(Some(&loc), 1);
             }
         }
     }
