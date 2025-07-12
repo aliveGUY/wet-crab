@@ -110,14 +110,10 @@ impl Program {
             let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
 
             let view_matrix = get_camera_transform();
+            let view_proj = mat4x4_mul(projection_matrix, view_matrix);
 
-            let viewport_txfm = mat4x4_mul(projection_matrix, view_matrix);
-
-            self.setup_viewport_uniform(
-                &viewport_txfm,
-                self.animated_object.material.shader_program
-            );
-            self.setup_viewport_uniform(&viewport_txfm, self.static_object.material.shader_program);
+            self.setup_viewport_uniform(&view_proj, self.animated_object.material.shader_program);
+            self.setup_viewport_uniform(&view_proj, self.static_object.material.shader_program);
 
             self.animated_object.render(&self.gl);
             self.static_object.render(&self.gl);

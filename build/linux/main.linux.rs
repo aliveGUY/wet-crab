@@ -37,28 +37,24 @@ impl App {
 
         if keyboard_state.is_scancode_pressed(Scancode::W) {
             movement_direction.push_str("forward");
-            println!("W key held - moving forward");
         }
         if keyboard_state.is_scancode_pressed(Scancode::S) {
             if !movement_direction.is_empty() {
                 movement_direction.push('-');
             }
             movement_direction.push_str("backward");
-            println!("S key held - moving backward");
         }
         if keyboard_state.is_scancode_pressed(Scancode::A) {
             if !movement_direction.is_empty() {
                 movement_direction.push('-');
             }
             movement_direction.push_str("left");
-            println!("A key held - moving left");
         }
         if keyboard_state.is_scancode_pressed(Scancode::D) {
             if !movement_direction.is_empty() {
                 movement_direction.push('-');
             }
             movement_direction.push_str("right");
-            println!("D key held - moving right");
         }
 
         if !movement_direction.is_empty() {
@@ -70,18 +66,12 @@ impl App {
     fn handle_mouse_motion(&mut self, x: i32, y: i32, xrel: i32, yrel: i32) {
         if self.cursor_locked {
             if xrel != 0 || yrel != 0 {
-                println!("Mouse movement (relative): ({}, {})", xrel, yrel);
-                
-                // Send to InputSystem - clean bridge pattern
                 InputSystem::instance().receive_mouse_event(&(xrel, yrel));
             }
         } else {
             if let Some(last_pos) = self.last_mouse_pos {
                 let delta = (x - last_pos.0, y - last_pos.1);
                 if delta.0.abs() > 1 || delta.1.abs() > 1 {
-                    println!("Mouse movement (absolute): {:?}", delta);
-                    
-                    // Send to InputSystem - clean bridge pattern
                     InputSystem::instance().receive_mouse_event(&delta);
                 }
             }
@@ -105,8 +95,6 @@ impl App {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🦀 Starting SDL2-based concurrent input demo...");
-
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
 
