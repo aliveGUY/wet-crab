@@ -126,8 +126,9 @@ impl AssetsManager {
         let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
 
         // Extract components - all error handling is internal
-        let mesh = extract_mesh(gl, &gltf, &buffers, asset_name);
-        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, asset_name);
+        let asset_name_str = format!("{:?}", asset_name);
+        let mesh = extract_mesh(gl, &gltf, &buffers, &asset_name_str);
+        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, &asset_name_str);
 
         // Create static object with default transform
         let mut transform = Transform::new();
@@ -157,10 +158,11 @@ impl AssetsManager {
         let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
 
         // Extract components - all error handling is internal
-        let mesh = extract_mesh(gl, &gltf, &buffers, asset_name);
-        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, asset_name);
-        let skeleton = extract_skeleton(&gltf, &buffers, asset_name);
-        let animation_channels = extract_animation_channels(&gltf, &buffers, asset_name);
+        let asset_name_str = format!("{:?}", asset_name);
+        let mesh = extract_mesh(gl, &gltf, &buffers, &asset_name_str);
+        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, &asset_name_str);
+        let skeleton = extract_skeleton(&gltf, &buffers, &asset_name_str);
+        let animation_channels = extract_animation_channels(&gltf, &buffers, &asset_name_str);
 
         // Create animated object with default transform
         let mut transform = Transform::new();

@@ -1,193 +1,201 @@
-use glutin::config::ConfigTemplateBuilder;
-use glutin::context::{ ContextApi, ContextAttributesBuilder, Version };
-use glutin::display::GetGlDisplay;
-use glutin::prelude::*;
-use glutin::surface::{ SurfaceAttributesBuilder, WindowSurface };
-use glutin_winit::DisplayBuilder;
-use raw_window_handle::HasWindowHandle;
-use std::cell::RefCell;
-use std::num::NonZeroU32;
-use std::rc::Rc;
 use std::time::Instant;
-use winit::application::ApplicationHandler;
-use winit::event::{ ElementState, KeyEvent, WindowEvent, DeviceEvent, DeviceId };
-use winit::event_loop::{ ActiveEventLoop, EventLoop };
-use winit::keyboard::{ KeyCode, PhysicalKey };
-use winit::window::{ Window, WindowId };
+use sdl2::event::Event;
+use sdl2::keyboard::{ Scancode, KeyboardState };
+use sdl2::mouse::MouseButton;
+use sdl2::video::GLProfile;
+use glow::Context;
 
 mod index;
-use index::{ Program, GlobalEventSystem, DesktopEventHandler };
+use index::{ Program };
+use index::engine::systems::{ EventSystem, InputSystem, DesktopInputHandler };
 
 struct App {
-    window: Option<Window>,
-    gl_context: Option<glutin::context::PossiblyCurrentContext>,
-    gl_surface: Option<glutin::surface::Surface<WindowSurface>>,
-    program: Option<Program>,
-    start_time: Option<Instant>,
-    last_frame_time: Option<Instant>,
+    program: Program,
+    start_time: Instant,
     cursor_locked: bool,
+    last_mouse_pos: Option<(i32, i32)>,
 }
 
-impl ApplicationHandler for App {
-    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
-        match event {
-            DeviceEvent::MouseMotion { delta } => {
-                // Use raw mouse deltas for unlimited rotation when cursor is locked
-                GlobalEventSystem::receive_device_mouse_motion(delta);
+impl App {
+    fn new(gl: Context) -> Result<Self, String> {
+        // Initialize clean systems architecture
+        EventSystem::initialize();
+        InputSystem::initialize(Box::new(DesktopInputHandler::new()));
+
+        let program = Program::new(gl).map_err(|e| format!("Failed to create program: {}", e))?;
+
+        Ok(App {
+            program,
+            start_time: Instant::now(),
+            cursor_locked: false,
+            last_mouse_pos: None,
+        })
+    }
+
+    fn process_keyboard_state(&mut self, keyboard_state: &KeyboardState) {
+        let mut movement_direction = String::new();
+
+        if keyboard_state.is_scancode_pressed(Scancode::W) {
+            movement_direction.push_str("forward");
+            println!("W key held - moving forward");
+        }
+        if keyboard_state.is_scancode_pressed(Scancode::S) {
+            if !movement_direction.is_empty() {
+                movement_direction.push('-');
             }
-            _ => {}
+            movement_direction.push_str("backward");
+            println!("S key held - moving backward");
+        }
+        if keyboard_state.is_scancode_pressed(Scancode::A) {
+            if !movement_direction.is_empty() {
+                movement_direction.push('-');
+            }
+            movement_direction.push_str("left");
+            println!("A key held - moving left");
+        }
+        if keyboard_state.is_scancode_pressed(Scancode::D) {
+            if !movement_direction.is_empty() {
+                movement_direction.push('-');
+            }
+            movement_direction.push_str("right");
+            println!("D key held - moving right");
+        }
+
+        if !movement_direction.is_empty() {
+            // Send to InputSystem - clean bridge pattern
+            InputSystem::instance().receive_key_event(&movement_direction);
         }
     }
 
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
-            return;
+    fn handle_mouse_motion(&mut self, x: i32, y: i32, xrel: i32, yrel: i32) {
+        if self.cursor_locked {
+            if xrel != 0 || yrel != 0 {
+                println!("Mouse movement (relative): ({}, {})", xrel, yrel);
+                
+                // Send to InputSystem - clean bridge pattern
+                InputSystem::instance().receive_mouse_event(&(xrel, yrel));
+            }
+        } else {
+            if let Some(last_pos) = self.last_mouse_pos {
+                let delta = (x - last_pos.0, y - last_pos.1);
+                if delta.0.abs() > 1 || delta.1.abs() > 1 {
+                    println!("Mouse movement (absolute): {:?}", delta);
+                    
+                    // Send to InputSystem - clean bridge pattern
+                    InputSystem::instance().receive_mouse_event(&delta);
+                }
+            }
+            self.last_mouse_pos = Some((x, y));
         }
-
-        let window = event_loop
-            .create_window(Window::default_attributes().with_title("Bridge-pattern GL demo"))
-            .unwrap();
-
-        let display_builder = DisplayBuilder::new();
-        let (_, gl_config) = display_builder
-            .build(event_loop, ConfigTemplateBuilder::new(), |mut c| c.next().unwrap())
-            .unwrap();
-
-        let display = gl_config.display();
-        let ctx_attrs = ContextAttributesBuilder::new()
-            .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
-            .build(Some(window.window_handle().unwrap().as_raw()));
-
-        let not_current = unsafe { display.create_context(&gl_config, &ctx_attrs).unwrap() };
-
-        let attrs = SurfaceAttributesBuilder::<WindowSurface>
-            ::new()
-            .build(
-                window.window_handle().unwrap().as_raw(),
-                NonZeroU32::new(800).unwrap(),
-                NonZeroU32::new(600).unwrap()
-            );
-        let surface = unsafe { display.create_window_surface(&gl_config, &attrs).unwrap() };
-        let ctx = not_current.make_current(&surface).unwrap();
-
-        let gl = unsafe {
-            glow::Context::from_loader_function(|s| {
-                display.get_proc_address(&std::ffi::CString::new(s).unwrap()) as *const _
-            })
-        };
-
-        let desktop_handler = Box::new(DesktopEventHandler::new());
-        GlobalEventSystem::initialize(desktop_handler);
-
-        let program = Program::new(gl).expect("Failed to create graphics program");
-
-        let now = Instant::now();
-        self.start_time = Some(now);
-        self.last_frame_time = Some(now);
-
-        window.request_redraw();
-
-        self.window = Some(window);
-        self.gl_context = Some(ctx);
-        self.gl_surface = Some(surface);
-        self.program = Some(program);
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+    fn render(
+        &mut self,
+        width: u32,
+        height: u32,
+        keyboard_state: &KeyboardState
+    ) -> Result<(), String> {
+        let elapsed = self.start_time.elapsed().as_secs_f32();
 
-            WindowEvent::RedrawRequested => {
-                if
-                    let (Some(surface), Some(ctx), Some(prog)) = (
-                        &self.gl_surface,
-                        &self.gl_context,
-                        &mut self.program,
-                    )
-                {
-                    if let Some(window) = &self.window {
-                        let t_now = Instant::now();
-                        let elapsed = self.start_time
-                            .map(|s| (t_now - s).as_secs_f32())
-                            .unwrap_or(0.0);
-                        self.last_frame_time = Some(t_now);
+        self.process_keyboard_state(keyboard_state);
 
-                        let size = window.inner_size();
-                        prog.render(size.width, size.height, elapsed).expect("render failed");
-                    }
-                    surface.swap_buffers(ctx).unwrap();
-
-                    if let Some(window) = &self.window {
-                        window.request_redraw();
-                    }
-                }
-            }
-
-            WindowEvent::Resized(_) => {
-                if let Some(w) = &self.window {
-                    w.request_redraw();
-                }
-            }
-
-            WindowEvent::KeyboardInput { event, .. } => {
-                // Handle Escape key for cursor unlocking
-                if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) = event.physical_key {
-                    if event.state == ElementState::Pressed && self.cursor_locked {
-                        if let Some(window) = &self.window {
-                            let _ = window.set_cursor_grab(winit::window::CursorGrabMode::None);
-                            window.set_cursor_visible(true);
-                            self.cursor_locked = false;
-                            println!("Cursor unlocked via Escape key");
-                        }
-                    }
-                }
-                GlobalEventSystem::receive_native_keyboard_event(&event);
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                GlobalEventSystem::receive_native_mouse_event(&position);
-            }
-            WindowEvent::MouseInput { state, button, .. } => {
-                // Handle cursor locking on left mouse click
-                if button == winit::event::MouseButton::Left && state == ElementState::Pressed && !self.cursor_locked {
-                    if let Some(window) = &self.window {
-                        // Try Locked mode first for infinite movement, fallback to Confined
-                        if window.set_cursor_grab(winit::window::CursorGrabMode::Locked).is_err() {
-                            let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
-                        }
-                        window.set_cursor_visible(false);
-                        self.cursor_locked = true;
-                        println!("Cursor locked via left mouse click");
-                    }
-                }
-                GlobalEventSystem::receive_native_mouse_click_event(&(state, button));
-            }
-
-            _ => {}
-        }
+        self.program.render(width, height, elapsed).map_err(|e| format!("Render error: {}", e))
     }
 }
 
-impl Drop for App {
-    fn drop(&mut self) {
-        if let Some(p) = &self.program {
-            p.cleanup();
-        }
-    }
-}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("🦀 Starting SDL2-based concurrent input demo...");
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let event_loop = EventLoop::new()?;
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
 
-    let mut app = App {
-        window: None,
-        gl_context: None,
-        gl_surface: None,
-        program: None,
-        start_time: None,
-        last_frame_time: None,
-        cursor_locked: false,
+    let gl_attr = video_subsystem.gl_attr();
+    gl_attr.set_context_profile(GLProfile::Core);
+    gl_attr.set_context_version(3, 3);
+    gl_attr.set_double_buffer(true);
+    gl_attr.set_depth_size(24);
+
+    let window = video_subsystem
+        .window("SDL2 Concurrent Input Demo", 800, 600)
+        .opengl()
+        .resizable()
+        .build()?;
+
+    let _gl_context = window.gl_create_context()?;
+    let gl = unsafe {
+        Context::from_loader_function(|s| video_subsystem.gl_get_proc_address(s) as *const _)
     };
 
-    event_loop.run_app(&mut app)?;
+    let mut app = App::new(gl)?;
+
+    let mut event_pump = sdl_context.event_pump()?;
+
+    println!("🎮 SDL2 event polling started - concurrent input ready!");
+    println!("📝 Instructions:");
+    println!("   - Hold WASD keys for movement");
+    println!("   - Move mouse for camera rotation");
+    println!("   - Left click to lock cursor");
+    println!("   - Escape to unlock cursor");
+    println!("   - Both inputs work simultaneously!");
+
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => {
+                    break 'running;
+                }
+
+                Event::KeyDown { scancode: Some(Scancode::Escape), repeat: false, .. } => {
+                    if app.cursor_locked {
+                        sdl_context.mouse().set_relative_mouse_mode(false);
+                        sdl_context.mouse().show_cursor(true);
+                        app.cursor_locked = false;
+                        app.last_mouse_pos = None;
+                        println!("🔓 Cursor unlocked via Escape key");
+                    }
+                }
+
+                Event::MouseMotion { x, y, xrel, yrel, .. } => {
+                    app.handle_mouse_motion(x, y, xrel, yrel);
+                }
+
+                Event::MouseButtonDown { mouse_btn: MouseButton::Left, .. } => {
+                    if !app.cursor_locked {
+                        sdl_context.mouse().set_relative_mouse_mode(true);
+                        sdl_context.mouse().show_cursor(false);
+                        app.cursor_locked = true;
+                        app.last_mouse_pos = None;
+                        println!("🔒 Cursor locked via left mouse click");
+                    }
+                }
+
+                Event::Window { win_event, .. } => {
+                    match win_event {
+                        sdl2::event::WindowEvent::Resized(width, height) => {
+                            println!("Window resized: {}x{}", width, height);
+                        }
+                        _ => {}
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        let keyboard_state = event_pump.keyboard_state();
+
+        let (width, height) = window.size();
+        if let Err(e) = app.render(width, height, &keyboard_state) {
+            eprintln!("Render error: {}", e);
+            break 'running;
+        }
+
+        window.gl_swap_window();
+
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+
+    println!("🏁 SDL2 demo finished!");
     Ok(())
 }

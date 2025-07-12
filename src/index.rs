@@ -50,13 +50,13 @@ pub mod movement_listeners {
 use movement_listeners::{ MovementListener, CameraRotationListener };
 
 // Re-export for platform-specific builds
-pub use engine::eventSystem::{ Event, EventType, GlobalEventSystem };
+pub use engine::systems::{ Event, EventType, EventSystem };
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use engine::eventSystem::DesktopEventHandler;
+pub use engine::systems::DesktopInputHandler;
 
 #[cfg(target_arch = "wasm32")]
-pub use engine::eventSystem::BrowserEventHandler;
+pub use engine::systems::BrowserInputHandler;
 
 // === MAIN PROGRAM ===
 
@@ -79,9 +79,10 @@ impl Program {
         animated_object.transform.translate(-2.0, -3.0, -5.0);
         static_object.transform.translate(2.0, -3.0, -5.0);
 
-        // Subscribe to events using global singleton
-        GlobalEventSystem::subscribe(EventType::Move, Box::new(MovementListener));
-        GlobalEventSystem::subscribe(EventType::RotateCamera, Box::new(CameraRotationListener));
+        // Subscribe to events using clean singleton
+        use std::sync::Arc;
+        EventSystem::subscribe(EventType::Move, Arc::new(MovementListener));
+        EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationListener));
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);

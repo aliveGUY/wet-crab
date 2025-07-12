@@ -6,7 +6,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 mod index;
-use index::{ Program, GlobalEventSystem, BrowserEventHandler };
+use index::{ Program };
+use index::engine::systems::{ EventSystem, InputSystem, BrowserInputHandler };
 
 struct RenderState {
     program: Program,
@@ -41,9 +42,9 @@ fn start_render_loop() -> Result<(), JsValue> {
 
     let gl = Context::from_webgl2_context(context);
 
-    // Initialize GlobalEventSystem with BrowserEventHandler
-    let browser_handler = Box::new(BrowserEventHandler::new());
-    GlobalEventSystem::initialize(browser_handler);
+    // Initialize clean systems architecture
+    EventSystem::initialize();
+    InputSystem::initialize(Box::new(BrowserInputHandler::new()));
 
     let program = Program::new(gl).map_err(|e| JsValue::from_str(&e))?;
 
@@ -68,7 +69,7 @@ fn start_render_loop() -> Result<(), JsValue> {
                         log("Cursor unlocked via Escape key");
                     }
                 }
-                GlobalEventSystem::receive_native_keyboard_event(&ke);
+                InputSystem::instance().receive_key_event(&ke);
             })
         );
         document.add_event_listener_with_callback(
@@ -81,7 +82,7 @@ fn start_render_loop() -> Result<(), JsValue> {
     {
         let keyup_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
             Box::new(move |ke: KeyboardEvent| {
-                GlobalEventSystem::receive_native_keyboard_event(&ke);
+                InputSystem::instance().receive_key_event(&ke);
             })
         );
         document.add_event_listener_with_callback("keyup", keyup_closure.as_ref().unchecked_ref())?;
@@ -91,7 +92,7 @@ fn start_render_loop() -> Result<(), JsValue> {
     {
         let mousemove_closure = Closure::<dyn FnMut(MouseEvent)>::wrap(
             Box::new(move |me: MouseEvent| {
-                GlobalEventSystem::receive_native_mouse_event(&me);
+                InputSystem::instance().receive_mouse_event(&me);
             })
         );
         document.add_event_listener_with_callback(
@@ -114,7 +115,7 @@ fn start_render_loop() -> Result<(), JsValue> {
                         log("Cursor locked via left mouse click");
                     }
                 }
-                GlobalEventSystem::receive_native_mouse_click_event(&me);
+                InputSystem::instance().receive_mouse_event(&me);
             })
         );
         document.add_event_listener_with_callback(

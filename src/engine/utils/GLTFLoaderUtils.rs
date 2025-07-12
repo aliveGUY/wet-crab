@@ -8,7 +8,7 @@ pub fn extract_mesh(
     gl: &glow::Context,
     gltf: &gltf::Gltf,
     buffers: &[Data],
-    asset_name: crate::index::assets_manager::Assets
+    asset_name: &str
 ) -> Mesh {
     let primitive = gltf
         .meshes()
@@ -100,7 +100,7 @@ pub fn extract_mesh(
 pub fn extract_skeleton(
     gltf: &gltf::Gltf,
     buffers: &[Data],
-    asset_name: crate::index::assets_manager::Assets
+    asset_name: &str
 ) -> Skeleton {
     let mut node_parents = vec![u32::MAX; gltf.nodes().len()];
     for node in gltf.nodes() {
@@ -156,7 +156,7 @@ pub fn extract_skeleton(
     }
 }
 
-pub fn extract_animation_channels(gltf: &gltf::Gltf, buffers: &[Data], asset_name: crate::index::assets_manager::Assets) -> Vec<AnimationChannel> {
+pub fn extract_animation_channels(gltf: &gltf::Gltf, buffers: &[Data], asset_name: &str) -> Vec<AnimationChannel> {
     gltf.animations()
         .next()
         .map(|anim| {
@@ -248,7 +248,7 @@ pub fn extract_material(
     _buffers: &[Data],
     png_data: &[u8],
     shader_program: glow::Program,
-    asset_name: crate::index::assets_manager::Assets
+    asset_name: &str
 ) -> Material {
     let material = gltf.materials().next()
         .unwrap_or_else(|| panic!("No material found for {:?}", asset_name));
