@@ -1,13 +1,12 @@
 pub mod eventTypes;
 pub mod eventTrait;
-pub mod eventSystem;
 pub mod desktopImplementation;
 pub mod browserImplementation;
+pub mod globalEventSystem;
 
-// Re-export commonly used types
-pub use eventTypes::{Event, EventType, EventListener};
-pub use eventTrait::NativeEventHandler;
-pub use eventSystem::EventSystem;
+pub use eventTypes::*;
+pub use eventTrait::*;
+pub use globalEventSystem::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktopImplementation::DesktopEventHandler;

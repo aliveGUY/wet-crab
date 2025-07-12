@@ -16,19 +16,16 @@ use winit::keyboard::{ KeyCode, PhysicalKey };
 use winit::window::{ Window, WindowId };
 
 mod index;
-use index::Program;
-use index::engine::eventSystem::{ DesktopEventHandler, EventSystem };
+use index::{ Program, GlobalEventSystem, DesktopEventHandler };
 
 struct App {
     window: Option<Window>,
     gl_context: Option<glutin::context::PossiblyCurrentContext>,
     gl_surface: Option<glutin::surface::Surface<WindowSurface>>,
     program: Option<Program>,
-    event_system: Option<Rc<RefCell<EventSystem>>>,
     start_time: Option<Instant>,
     last_frame_time: Option<Instant>,
 }
-
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -68,13 +65,10 @@ impl ApplicationHandler for App {
             })
         };
 
-        let event_system = Rc::new(
-            RefCell::new(EventSystem::new(Box::new(DesktopEventHandler::new())))
-        );
+        let desktop_handler = Box::new(DesktopEventHandler::new());
+        GlobalEventSystem::initialize(desktop_handler);
 
-        let program = Program::new(gl, event_system.clone()).expect(
-            "Failed to create graphics program"
-        );
+        let program = Program::new(gl).expect("Failed to create graphics program");
 
         let now = Instant::now();
         self.start_time = Some(now);
@@ -86,7 +80,6 @@ impl ApplicationHandler for App {
         self.gl_context = Some(ctx);
         self.gl_surface = Some(surface);
         self.program = Some(program);
-        self.event_system = Some(event_system);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -126,21 +119,10 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::KeyboardInput { event, .. } => {
-                if let Some(es_rc) = &self.event_system {
-                    // Handle ESC for exit
-                    if let PhysicalKey::Code(KeyCode::Escape) = event.physical_key {
-                        if event.state == ElementState::Pressed {
-                            println!("ESC pressed – exiting");
-                        }
-                    }
-                    // Pass all events to EventSystem
-                    es_rc.borrow().receive_native_keyboard_event(&event);
-                }
+                GlobalEventSystem::receive_native_keyboard_event(&event);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if let Some(es_rc) = &self.event_system {
-                    es_rc.borrow().receive_native_mouse_event(&position);
-                }
+                GlobalEventSystem::receive_native_mouse_event(&position);
             }
 
             _ => {}
@@ -164,7 +146,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         gl_context: None,
         gl_surface: None,
         program: None,
-        event_system: None,
         start_time: None,
         last_frame_time: None,
     };

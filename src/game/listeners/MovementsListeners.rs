@@ -1,7 +1,10 @@
 use crate::index::engine::eventSystem::{ Event, EventListener };
 use crate::index::game_state::add_camera_rotation_delta;
 
+#[derive(Debug)]
 pub struct CameraRotationListener;
+
+#[derive(Debug)]
 pub struct MovementListener;
 
 impl EventListener for CameraRotationListener {

@@ -14,6 +14,6 @@ pub struct Event {
     pub payload: Box<dyn Any>,
 }
 
-pub trait EventListener {
+pub trait EventListener: Send + Sync {
     fn update(&self, event: &Event);
 }

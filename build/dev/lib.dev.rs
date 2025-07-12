@@ -6,13 +6,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 mod index;
-use index::Program;
-use index::engine::eventSystem::{ BrowserEventHandler, EventSystem };
+use index::{ Program, GlobalEventSystem, BrowserEventHandler };
 
 struct RenderState {
     program: Program,
     canvas: HtmlCanvasElement,
-    event_system: Rc<RefCell<EventSystem>>,
     start_time: f64,
     last_frame_time: f64,
 }
@@ -43,27 +41,25 @@ fn start_render_loop() -> Result<(), JsValue> {
 
     let gl = Context::from_webgl2_context(context);
 
-    let event_system = Rc::new(
-        RefCell::new(EventSystem::new(Box::new(BrowserEventHandler::new())))
-    );
+    // Initialize GlobalEventSystem with BrowserEventHandler
+    let browser_handler = Box::new(BrowserEventHandler::new());
+    GlobalEventSystem::initialize(browser_handler);
 
-    let program = Program::new(gl, event_system.clone()).map_err(|e| JsValue::from_str(&e))?;
+    let program = Program::new(gl).map_err(|e| JsValue::from_str(&e))?;
 
     let render_state = Rc::new(
         RefCell::new(RenderState {
             program,
             canvas,
-            event_system: event_system.clone(),
             start_time: 0.0,
             last_frame_time: 0.0,
         })
     );
 
     {
-        let es = event_system.clone();
         let keydown_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
             Box::new(move |ke: KeyboardEvent| {
-                es.borrow().receive_native_keyboard_event(&ke);
+                GlobalEventSystem::receive_native_keyboard_event(&ke);
             })
         );
         document.add_event_listener_with_callback(
@@ -74,10 +70,9 @@ fn start_render_loop() -> Result<(), JsValue> {
     }
 
     {
-        let es = event_system.clone();
         let keyup_closure = Closure::<dyn FnMut(KeyboardEvent)>::wrap(
             Box::new(move |ke: KeyboardEvent| {
-                es.borrow().receive_native_keyboard_event(&ke);
+                GlobalEventSystem::receive_native_keyboard_event(&ke);
             })
         );
         document.add_event_listener_with_callback("keyup", keyup_closure.as_ref().unchecked_ref())?;
@@ -85,10 +80,9 @@ fn start_render_loop() -> Result<(), JsValue> {
     }
 
     {
-        let es = event_system.clone();
         let mousemove_closure = Closure::<dyn FnMut(MouseEvent)>::wrap(
             Box::new(move |me: MouseEvent| {
-                es.borrow().receive_native_mouse_event(&me);
+                GlobalEventSystem::receive_native_mouse_event(&me);
             })
         );
         document.add_event_listener_with_callback(

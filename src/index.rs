@@ -1,6 +1,4 @@
 use glow::HasContext;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 mod math {
     include!("engine/utils/math.rs");
@@ -52,7 +50,7 @@ pub mod movement_listeners {
 use movement_listeners::{ MovementListener, CameraRotationListener };
 
 // Re-export for platform-specific builds
-pub use engine::eventSystem::{ Event, EventType, EventSystem };
+pub use engine::eventSystem::{ Event, EventType, GlobalEventSystem };
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use engine::eventSystem::DesktopEventHandler;
@@ -66,11 +64,10 @@ pub struct Program {
     gl: glow::Context,
     animated_object: AnimatedObject3D,
     static_object: StaticObject3D,
-    event_system: Rc<RefCell<EventSystem>>,
 }
 
 impl Program {
-    pub fn new(gl: glow::Context, event_system: Rc<RefCell<EventSystem>>) -> Result<Self, String> {
+    pub fn new(gl: glow::Context) -> Result<Self, String> {
         initialize_asset_manager(&gl);
         initialize_game_state();
 
@@ -82,25 +79,22 @@ impl Program {
         animated_object.transform.translate(-2.0, -3.0, -5.0);
         static_object.transform.translate(2.0, -3.0, -5.0);
 
-        {
-            let mut es = event_system.borrow_mut();
-            es.subscribe(EventType::Move, Box::new(MovementListener));
-            es.subscribe(EventType::RotateCamera, Box::new(CameraRotationListener));
-        }
+        // Subscribe to events using global singleton
+        GlobalEventSystem::subscribe(EventType::Move, Box::new(MovementListener));
+        GlobalEventSystem::subscribe(EventType::RotateCamera, Box::new(CameraRotationListener));
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
         }
 
         println!(
-            "✅ Program initialized successfully with shared components and shader-in-material architecture"
+            "✅ Program initialized successfully with refactored global event system architecture"
         );
 
         Ok(Self {
             gl,
             animated_object,
             static_object,
-            event_system,
         })
     }
 
