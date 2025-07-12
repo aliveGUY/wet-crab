@@ -1,0 +1,32 @@
+[package]
+name = "runst_poc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 3D модельки и данные
+gltf = "1.4"
+
+# Для единого глобального состояния (например, shader-кэши)
+once_cell = "1.19"
+
+# Утилиты для приведения к &[u8] и т.п.
+bytemuck = "1.23.1"
+
+# Загрузка текстур
+image = { version = "0.24", default-features = false, features = ["png"] }
+
+# OpenGL
+glow = "0.16.0"
+
+# Окна и события
+winit = "0.30.0"
+glutin = "0.32.3"
+glutin-winit = "0.5.0"
+
+# Сырые дескрипторы окон для glutin
+raw-window-handle = "0.6.2"
+
+# Рекомендуемые дополнения для работы с логами (если используешь)
+log = "0.4"
+env_logger = "0.10" 
