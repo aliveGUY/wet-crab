@@ -31,6 +31,11 @@ impl Transform {
     pub fn get_matrix(&self) -> &Mat4x4 {
         &self.matrix
     }
+    
+    pub fn get_position_xy(&self) -> [f32; 2] {
+    [self.matrix[12], self.matrix[14]]
+}
+
 }
 
 impl Default for Transform {
