@@ -20,7 +20,7 @@ pub struct CameraRotationSystem;
 pub struct MovementSystem;
 
 impl System for CameraRotationSystem {
-    fn handle_event(event: &Event) {
+    fn event(&self, event: &Event) {
         if let Some([pitch_delta, yaw_delta]) = event.payload.downcast_ref::<[f32; 2]>() {
             add_camera_rotation_delta(*pitch_delta, *yaw_delta);
         }
@@ -28,7 +28,7 @@ impl System for CameraRotationSystem {
 }
 
 impl System for MovementSystem {
-    fn handle_event(event: &Event) {
+    fn event(&self, event: &Event) {
         let dir_text = match event.payload.downcast_ref::<String>() {
             Some(s) => s.as_str(),
             None => {

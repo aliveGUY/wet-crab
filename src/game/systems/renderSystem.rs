@@ -222,7 +222,7 @@ impl RenderSystem {
 }
 
 impl System for RenderSystem {
-    fn update() {
+    fn update(&self) {
         // This will be called by the system manager, but we need gl context
         // The actual rendering will be called from index.rs with proper parameters
         panic!("RenderSystem::update() should not be called directly. Use RenderSystem::update(gl, width, height) instead.");
