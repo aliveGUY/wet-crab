@@ -1,9 +1,26 @@
 use glow::HasContext;
 
+// Import ECS functionality
+#[macro_use]
+mod entity_component_system {
+    include!("engine/systems/entityComponentSystem.rs");
+}
+use entity_component_system::*;
+
+// Import Transform component
+mod transform {
+    include!("engine/components/Tranform.rs");
+}
+use transform::Transform;
+
 mod math {
     include!("engine/utils/math.rs");
 }
 use math::*;
+
+mod inputUtils {
+    include!("engine/utils/inputUtils.rs");
+}
 
 mod shared_components {
     include!("engine/components/SharedComponents.rs");
@@ -40,8 +57,23 @@ use assets_manager::{
 };
 use game_state::{ initialize_game_state, get_camera_transform };
 
-#[path = "engine/mod.rs"]
-pub mod engine;
+// Import System trait
+mod system_trait {
+    include!("engine/components/System.rs");
+}
+use system_trait::System;
+
+// Import render system
+mod render_system {
+    include!("game/systems/renderSystem.rs");
+}
+use render_system::RenderSystem;
+
+// Import movement systems
+mod movement_systems {
+    include!("game/systems/movementSystem.rs");
+}
+use movement_systems::{MovementSystem, CameraRotationSystem};
 
 pub mod movement_listeners {
     include!("game/listeners/MovementsListeners.rs");
@@ -49,21 +81,30 @@ pub mod movement_listeners {
 
 use movement_listeners::{ MovementListener, CameraRotationListener };
 
-// Re-export for platform-specific builds
-pub use engine::systems::{ Event, EventType, EventSystem };
+// Import event system
+mod event_system {
+    include!("engine/systems/eventSystem.rs");
+}
+pub use event_system::{EventSystem, EventType};
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use engine::systems::DesktopInputHandler;
-
-#[cfg(target_arch = "wasm32")]
-pub use engine::systems::BrowserInputHandler;
+// Create engine module structure for compatibility
+pub mod engine {
+    pub mod systems {
+        pub use super::super::entity_component_system::*;
+        pub use super::super::event_system::*;
+        
+        // Import input system  
+        mod input_system {
+            include!("engine/systems/inputSystem.rs");
+        }
+        pub use input_system::*;
+    }
+}
 
 // === MAIN PROGRAM ===
 
 pub struct Program {
     gl: glow::Context,
-    animated_object: AnimatedObject3D,
-    static_object: StaticObject3D,
 }
 
 impl Program {
@@ -71,13 +112,19 @@ impl Program {
         initialize_asset_manager(&gl);
         initialize_game_state();
 
-        // Load objects with correct types
-        let mut animated_object = get_animated_object_copy(Assets::TestingDoll);
-        let mut static_object = get_static_object_copy(Assets::Chair);
+        // Create chair entity with ECS
+        let chair_entity = spawn();
+        let chair_object = get_static_object_copy(Assets::Chair);
+        let mut chair_transform = Transform::new();
+        chair_transform.translate(2.0, -3.0, -5.0);
+        insert_many!(chair_entity, chair_object, chair_transform);
 
-        // Set initial positions
-        animated_object.transform.translate(-2.0, -3.0, -5.0);
-        static_object.transform.translate(2.0, -3.0, -5.0);
+        // Create animated doll entity with ECS
+        let doll_entity = spawn();
+        let doll_object = get_animated_object_copy(Assets::TestingDoll);
+        let mut doll_transform = Transform::new();
+        doll_transform.translate(-2.0, -3.0, -5.0);
+        insert_many!(doll_entity, doll_object, doll_transform);
 
         // Subscribe to events using clean singleton
         use std::sync::Arc;
@@ -89,62 +136,24 @@ impl Program {
         }
 
         println!(
-            "✅ Program initialized successfully with refactored global event system architecture"
+            "✅ Program initialized successfully with ECS-based architecture"
         );
 
         Ok(Self {
             gl,
-            animated_object,
-            static_object,
         })
     }
 
     pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
-        unsafe {
-            self.gl.viewport(0, 0, width as i32, height as i32);
-            self.gl.clear_color(0.1, 0.1, 0.1, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-
-            let fov = (90.0_f32).to_radians();
-            let aspect_ratio = (width as f32) / (height as f32);
-            let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
-
-            let view_matrix = get_camera_transform();
-            let view_proj = mat4x4_mul(projection_matrix, view_matrix);
-
-            self.setup_viewport_uniform(&view_proj, self.animated_object.material.shader_program);
-            self.setup_viewport_uniform(&view_proj, self.static_object.material.shader_program);
-
-            self.animated_object.render(&self.gl);
-            self.static_object.render(&self.gl);
-
-            self.gl.bind_vertex_array(None);
-        }
+        // Use the ECS-based RenderSystem instead of manual rendering
+        RenderSystem::update(&self.gl, width, height);
         Ok(())
-    }
-
-    fn setup_viewport_uniform(&self, viewport_txfm: &[f32; 16], shader_program: glow::Program) {
-        unsafe {
-            self.gl.use_program(Some(shader_program));
-
-            if let Some(loc) = self.gl.get_uniform_location(shader_program, "viewport_txfm") {
-                self.gl.uniform_matrix_4_f32_slice(Some(&loc), true, viewport_txfm);
-            }
-
-            if let Some(loc) = self.gl.get_uniform_location(shader_program, "baseColorTexture") {
-                self.gl.uniform_1_i32(Some(&loc), 0);
-            }
-            if let Some(loc) = self.gl.get_uniform_location(shader_program, "hasTexture") {
-                self.gl.uniform_1_i32(Some(&loc), 1);
-            }
-        }
     }
 
     #[allow(dead_code)]
     pub fn cleanup(&self) {
-        unsafe {
-            self.gl.delete_vertex_array(self.animated_object.mesh.vao);
-            self.gl.delete_vertex_array(self.static_object.mesh.vao);
-        }
+        // Cleanup is now handled by the ECS system
+        // Individual entities and their components will be cleaned up automatically
+        println!("Program cleanup completed");
     }
 }

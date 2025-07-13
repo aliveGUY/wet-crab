@@ -1,43 +1,43 @@
 // src/world.rs
-//! Minimal ECS with **string‑based entity IDs**, a global singleton `World`,
-//! variadic *insert* **and now variadic *query***.
-//!
-//!   • `insert_many!(id, C1(..), C2(..), …)` – insert multiple components atomically.
-//!   • `query!((A, B, C), |id, a, b, c| { … })` – iterate over **all**
-//!     entities that own *every* listed component.
-//!   • `query_by_id!(id, (A, B, C), |a, b, c| { … })` – borrow those
-//!     components for **one** entity.
-//!
-//! These procedures are implemented as *variadic macros* that expand to the
-//! corresponding `queryN` / `withN` specialisations and use the global world
-//! singleton directly. We ship ready‑made implementations up to **ten**
-//! components – extend if you need more.
-//!
-//! ------------------------------------------------------------------------
-//! Compile‑time requirements (Cargo.toml):
-//! once_cell = "1"
-//! uuid      = { version = "1", features = ["v4"] }
-//! paste     = "1"
-//!
-//! ------------------------------------------------------------------------
-//! USAGE EXAMPLE
-//! ------------------------------------------------------------------------
-//! ```rust
-//! let e = spawn();
-//! insert_many!(e, Transform(0.0, 0.0), Velocity(1.0, 0.0), Health(100));
-//!
-//! // iterate over every entity with Transform & Velocity
-//! query!((Transform, Velocity), |id, t, v| {
-//!     t.0 += v.0;
-//! });
-//!
-//! // operate on the *player* only
-//! if let Some(pid) = PLAYER_ENTITY_ID.read().unwrap().clone() {
-//!     query_by_id!(pid, (Transform, Health), |t, h| {
-//!         println!("player now at {:?} with {:?} HP", t, h);
-//!     });
-//! }
-//! ```
+// Minimal ECS with **string‑based entity IDs**, a global singleton `World`,
+// variadic *insert* **and now variadic *query***.
+//
+//   • `insert_many!(id, C1(..), C2(..), …)` – insert multiple components atomically.
+//   • `query!((A, B, C), |id, a, b, c| { … })` – iterate over **all**
+//     entities that own *every* listed component.
+//   • `query_by_id!(id, (A, B, C), |a, b, c| { … })` – borrow those
+//     components for **one** entity.
+//
+// These procedures are implemented as *variadic macros* that expand to the
+// corresponding `queryN` / `withN` specialisations and use the global world
+// singleton directly. We ship ready‑made implementations up to **ten**
+// components – extend if you need more.
+//
+// ------------------------------------------------------------------------
+// Compile‑time requirements (Cargo.toml):
+// once_cell = "1"
+// uuid      = { version = "1", features = ["v4"] }
+// paste     = "1"
+//
+// ------------------------------------------------------------------------
+// USAGE EXAMPLE
+// ------------------------------------------------------------------------
+// ```rust
+// let e = spawn();
+// insert_many!(e, Transform(0.0, 0.0), Velocity(1.0, 0.0), Health(100));
+//
+// // iterate over every entity with Transform & Velocity
+// query!((Transform, Velocity), |id, t, v| {
+//     t.0 += v.0;
+// });
+//
+// // operate on the *player* only
+// if let Some(pid) = PLAYER_ENTITY_ID.read().unwrap().clone() {
+//     query_by_id!(pid, (Transform, Health), |t, h| {
+//         println!("player now at {:?} with {:?} HP", t, h);
+//     });
+// }
+// ```
 
 use once_cell::sync::Lazy;
 use std::{ any::{ Any, TypeId }, collections::HashMap, sync::{ RwLock, RwLockWriteGuard } };
@@ -535,16 +535,15 @@ impl<T: Component> Insertable for T {
 macro_rules! insert_many {
     ($entity:expr $(, $comp:expr)+ $(,)?) => {
         {
-        use std::boxed::Box; use $crate::Insertable;
-        let mut v: Vec<Box<dyn Insertable>> = Vec::new();
+        use std::boxed::Box; use crate::index::entity_component_system::Insertable;
+        let mut v: Vec<Box<dyn crate::index::entity_component_system::Insertable>> = Vec::new();
         $( v.push(Box::new($comp)); )+
-        $crate::world().insert_dyn(&$entity, v);
+        crate::index::entity_component_system::world().insert_dyn(&$entity, v);
         }
     };
 }
 
-// need paste crate
-extern crate paste;
+// Simple macro implementation without paste crate
 
 impl World {
     pub fn query2<F, C1, C2>(&mut self, mut f: F)
@@ -863,31 +862,31 @@ impl World {
 #[macro_export]
 macro_rules! query {
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty, $c10:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident, $a10:ident | $body:block) => {
-        $crate::world().query10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
+        crate::index::entity_component_system::world().query10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident | $body:block) => {
-        $crate::world().query9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
+        crate::index::entity_component_system::world().query9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident | $body:block) => {
-        $crate::world().query8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
+        crate::index::entity_component_system::world().query8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident | $body:block) => {
-        $crate::world().query7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
+        crate::index::entity_component_system::world().query7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident | $body:block) => {
-        $crate::world().query6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(|$id, $a1, $a2, $a3, $a4, $a5, $a6| $body)
+        crate::index::entity_component_system::world().query6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(|$id, $a1, $a2, $a3, $a4, $a5, $a6| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
-        $crate::world().query5::<_, $c1, $c2, $c3, $c4, $c5>(|$id, $a1, $a2, $a3, $a4, $a5| $body)
+        crate::index::entity_component_system::world().query5::<_, $c1, $c2, $c3, $c4, $c5>(|$id, $a1, $a2, $a3, $a4, $a5| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
-        $crate::world().query4::<_, $c1, $c2, $c3, $c4>(|$id, $a1, $a2, $a3, $a4| $body)
+        crate::index::entity_component_system::world().query4::<_, $c1, $c2, $c3, $c4>(|$id, $a1, $a2, $a3, $a4| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident | $body:block) => {
-        $crate::world().query3::<_, $c1, $c2, $c3>(|$id, $a1, $a2, $a3| $body)
+        crate::index::entity_component_system::world().query3::<_, $c1, $c2, $c3>(|$id, $a1, $a2, $a3| $body)
     };
     (($c1:ty, $c2:ty), | $id:ident, $a1:ident, $a2:ident | $body:block) => {
-        $crate::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
+        crate::index::entity_component_system::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
     };
 }
 
