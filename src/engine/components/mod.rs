@@ -7,3 +7,4 @@ pub mod SharedComponents;
 pub mod Skeleton;
 pub mod StaticObject3D;
 pub mod Tranform;
+pub mod Collider;

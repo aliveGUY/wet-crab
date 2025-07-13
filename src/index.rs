@@ -11,6 +11,11 @@ mod transform {
 }
 use transform::Transform;
 
+mod collider {
+    include!("engine/components/Collider.rs");
+}
+use collider::Collider;
+
 mod math {
     include!("engine/utils/math.rs");
 }
@@ -39,12 +44,6 @@ mod gltf_loader_utils {
     include!("engine/utils/GLTFLoaderUtils.rs");
 }
 
-mod collider_system {
-    include!("engine/systems/ColliderSystem.rs");
-}
-
-use collider_system::{ColliderSystem, ColliderShape};
-
 mod assets_manager {
     include!("engine/managers/AssetsManager.rs");
 }
@@ -70,6 +69,11 @@ mod render_system {
     include!("game/systems/renderSystem.rs");
 }
 use render_system::RenderSystem;
+
+mod collider_system {
+    include!("game/systems/colliderSystem.rs");
+}
+use collider_system::ColliderSystem;
 
 mod movement_systems {
     include!("game/systems/movementSystem.rs");
@@ -106,8 +110,10 @@ impl Program {
         let chair_entity = spawn();
         let chair_object = get_static_object_copy(Assets::Chair);
         let mut chair_transform = Transform::new();
+        let mut chair_collider = Collider::new();
+
         chair_transform.translate(2.0, -3.0, -5.0);
-        insert_many!(chair_entity, chair_object, chair_transform);
+        insert_many!(chair_entity, chair_object, chair_transform, chair_collider);
 
         let doll_entity = spawn();
         let doll_object = get_animated_object_copy(Assets::TestingDoll);
@@ -132,8 +138,11 @@ impl Program {
 
     pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
         RenderSystem::update(&self.gl, width, height);
+        ColliderSystem::update();
         Ok(())
     }
+
+
 
     #[allow(dead_code)]
     pub fn cleanup(&self) {
