@@ -121,6 +121,7 @@ impl Program {
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
+        }
 
         println!("✅ Program initialized successfully with ECS-based architecture");
 
@@ -138,5 +139,4 @@ impl Program {
     pub fn cleanup(&self) {
         println!("Program cleanup completed");
     }
-}
 }
