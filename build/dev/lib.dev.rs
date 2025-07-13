@@ -15,7 +15,7 @@ struct RenderState {
     canvas: HtmlCanvasElement,
     start_time: f64,
     last_frame_time: f64,
-    pressed_keys: HashSet<String>,  // Track currently pressed keys
+    pressed_keys: HashSet<String>,
 }
 
 #[wasm_bindgen(start)]

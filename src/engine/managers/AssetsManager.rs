@@ -134,7 +134,7 @@ impl AssetsManager {
         let mut transform = Transform::new();
         transform.translate(0.0, 0.0, 0.0); // Default position
 
-        let static_object = StaticObject3D::new(transform, mesh, material);
+        let static_object = StaticObject3D::new(mesh, material);
 
         // Store in static assets map
         self.static_assets.insert(asset_name, static_object);
@@ -169,7 +169,6 @@ impl AssetsManager {
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let animated_object = AnimatedObject3D::new(
-            transform, 
             mesh, 
             material, 
             skeleton, 

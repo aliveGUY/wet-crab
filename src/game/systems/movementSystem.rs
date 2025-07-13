@@ -1,10 +1,12 @@
-use crate::index::engine::systems::{ Event, EventListener };
+// Import types and functions from parent scope
+use crate::index::System;
+use crate::index::event_system::Event;
 use crate::index::game_state::{
     add_camera_rotation_delta,
     move_camera_forward,
     move_camera_back,
-    move_camera_right,
     move_camera_left,
+    move_camera_right,
     move_camera_forward_left,
     move_camera_forward_right,
     move_camera_back_left,
@@ -12,21 +14,21 @@ use crate::index::game_state::{
 };
 
 #[derive(Debug)]
-pub struct CameraRotationListener;
+pub struct CameraRotationSystem;
 
 #[derive(Debug)]
-pub struct MovementListener;
+pub struct MovementSystem;
 
-impl EventListener for CameraRotationListener {
-    fn update(&self, event: &Event) {
+impl System for CameraRotationSystem {
+    fn event(&self, event: &Event) {
         if let Some([pitch_delta, yaw_delta]) = event.payload.downcast_ref::<[f32; 2]>() {
             add_camera_rotation_delta(*pitch_delta, *yaw_delta);
         }
     }
 }
 
-impl EventListener for MovementListener {
-    fn update(&self, event: &Event) {
+impl System for MovementSystem {
+    fn event(&self, event: &Event) {
         let dir_text = match event.payload.downcast_ref::<String>() {
             Some(s) => s.as_str(),
             None => {

@@ -16,14 +16,13 @@ pub struct Event {
     pub payload: Box<dyn Any + Send + Sync>,
 }
 
-pub trait EventListener: Send + Sync {
-    fn update(&self, event: &Event);
-}
+// Import System trait from parent scope
+use crate::index::System;
 
 static EVENT_SYSTEM: OnceLock<EventSystem> = OnceLock::new();
 
 pub struct EventSystem {
-    subscribers: DashMap<EventType, Vec<Arc<dyn EventListener>>>,
+    subscribers: DashMap<EventType, Vec<Arc<dyn System>>>,
 }
 
 impl EventSystem {
@@ -37,9 +36,9 @@ impl EventSystem {
         EVENT_SYSTEM.get().expect("EventSystem not initialized")
     }
 
-    pub fn subscribe(event_type: EventType, listener: Arc<dyn EventListener>) {
+    pub fn subscribe(event_type: EventType, system: Arc<dyn System>) {
         let instance = Self::instance();
-        instance.subscribers.entry(event_type).or_insert_with(Vec::new).push(listener);
+        instance.subscribers.entry(event_type).or_insert_with(Vec::new).push(system);
     }
 
     pub fn unsubscribe(event_type: EventType) {
@@ -50,9 +49,9 @@ impl EventSystem {
     pub fn notify(event: Event) {
         let instance = Self::instance();
 
-        if let Some(listeners) = instance.subscribers.get(&event.event_type) {
-            for listener in listeners.iter() {
-                listener.update(&event);
+        if let Some(systems) = instance.subscribers.get(&event.event_type) {
+            for system in systems.iter() {
+                system.event(&event);
             }
         }
     }
