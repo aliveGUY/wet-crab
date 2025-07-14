@@ -1,6 +1,6 @@
 use gltf::buffer::Data;
 use glow::HasContext;
-use crate::index::engine::components::SharedComponents::{Mesh, Material};
+use crate::index::engine::components::{MeshComponent, MaterialComponent};
 use crate::index::engine::components::AnimatedObject3D::{Skeleton, Node, AnimationChannel, AnimationType};
 use crate::index::engine::utils::math::mat4x4_transpose;
 
@@ -9,7 +9,7 @@ pub fn extract_mesh(
     gltf: &gltf::Gltf,
     buffers: &[Data],
     asset_name: &str
-) -> Mesh {
+) -> MeshComponent {
     let primitive = gltf
         .meshes()
         .next()
@@ -89,7 +89,7 @@ pub fn extract_mesh(
 
         gl.bind_vertex_array(None);
 
-        Mesh {
+        MeshComponent {
             vao,
             index_count: indices.len(),
             vertex_count: positions.len() / 3,
@@ -249,13 +249,13 @@ pub fn extract_material(
     png_data: &[u8],
     shader_program: glow::Program,
     asset_name: &str
-) -> Material {
+) -> MaterialComponent {
     let material = gltf.materials().next()
         .unwrap_or_else(|| panic!("No material found for {:?}", asset_name));
     
     let pbr = material.pbr_metallic_roughness();
     
-    let mut mat = Material::new(shader_program);
+    let mut mat = MaterialComponent::new(shader_program);
     mat.metallic_factor = pbr.metallic_factor();
     mat.roughness_factor = pbr.roughness_factor();
     mat.double_sided = material.double_sided();

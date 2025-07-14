@@ -2,17 +2,19 @@ pub mod AnimatedObject3D;
 pub mod AnimationState;
 pub mod Animator;
 pub mod Camera;
+pub mod Collider;
 pub mod Material;
 pub mod Mesh;
-pub mod SharedComponents;
 pub mod Skeleton;
 pub mod StaticObject3D;
-pub mod Collider;
 pub mod System;
 pub mod Transform;
 
-// Re-export shared components (which includes Transform, Mesh, Material)
-pub use SharedComponents::*;
+// Re-export shared components directly (no more SharedComponents layer)
+pub use Transform::Transform as TransformComponent;
+pub use Mesh::Mesh as MeshComponent;
+pub use Material::Material as MaterialComponent;
+pub use Collider::Collider as ColliderComponent;
 
 // Re-export the main component types using aliases to avoid conflicts
 pub use AnimatedObject3D::AnimatedObject3D as AnimatedObject3DComponent;

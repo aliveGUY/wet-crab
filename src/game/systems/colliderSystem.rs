@@ -1,11 +1,10 @@
-use crate::index::Transform;
-use crate::index::Collider;
+use crate::index::engine::components::{TransformComponent, ColliderComponent};
 
 pub struct ColliderSystem;
 
 impl ColliderSystem {
     pub fn update() {
-        query!((Transform, Collider), |_id, transform, collider| {
+        query!((TransformComponent, ColliderComponent), |_id, transform, collider| {
             println!("🔍 Entity at position");
         });
     }

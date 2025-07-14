@@ -1,5 +1,5 @@
 // Import shared components
-use crate::index::engine::components::SharedComponents::{Mesh, Material};
+use crate::index::engine::components::{MeshComponent, MaterialComponent};
 
 // Import animation-specific components
 mod skeleton_mod {
@@ -18,8 +18,8 @@ pub use animator_mod::Animator;
 
 #[derive(Clone)]
 pub struct AnimatedObject3D {
-    pub mesh: Mesh,
-    pub material: Material,  // Required, no Option
+    pub mesh: MeshComponent,
+    pub material: MaterialComponent,  // Required, no Option
     pub skeleton: Skeleton,  // Required, no Option
     pub animation_channels: Vec<AnimationChannel>,  // Required
     pub animator: Animator,  // Required, now public for system access
@@ -27,8 +27,8 @@ pub struct AnimatedObject3D {
 
 impl AnimatedObject3D {
     pub fn new(
-        mesh: Mesh, 
-        material: Material, 
+        mesh: MeshComponent, 
+        material: MaterialComponent, 
         skeleton: Skeleton, 
         animation_channels: Vec<AnimationChannel>
     ) -> Self {

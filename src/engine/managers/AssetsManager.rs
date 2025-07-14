@@ -3,8 +3,7 @@ use once_cell::sync::Lazy;
 use glow::HasContext;
 
 // Import required components - using the new module structure
-use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent};
-use crate::index::engine::components::SharedComponents::{Transform, Mesh, Material};
+use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, TransformComponent, MeshComponent, MaterialComponent};
 use crate::index::engine::utils::GLTFLoaderUtils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -130,7 +129,7 @@ impl AssetsManager {
         let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, &asset_name_str);
 
         // Create static object with default transform
-        let mut transform = Transform::new();
+        let mut transform = TransformComponent::new();
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let static_object = StaticObject3DComponent::new(mesh, material);
@@ -164,7 +163,7 @@ impl AssetsManager {
         let animation_channels = extract_animation_channels(&gltf, &buffers, &asset_name_str);
 
         // Create animated object with default transform
-        let mut transform = Transform::new();
+        let mut transform = TransformComponent::new();
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let animated_object = AnimatedObject3DComponent::new(
