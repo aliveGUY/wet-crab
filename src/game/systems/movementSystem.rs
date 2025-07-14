@@ -1,7 +1,7 @@
 // Import types and functions from parent scope
-use crate::index::System;
-use crate::index::event_system::Event;
-use crate::index::{PLAYER_ENTITY_ID, Camera};
+use crate::index::engine::components::{SystemTrait, CameraComponent};
+use crate::index::engine::systems::eventSystem::Event;
+use crate::index::PLAYER_ENTITY_ID;
 
 #[derive(Debug)]
 pub struct CameraRotationSystem;
@@ -9,7 +9,7 @@ pub struct CameraRotationSystem;
 #[derive(Debug)]
 pub struct MovementSystem;
 
-impl System for CameraRotationSystem {
+impl SystemTrait for CameraRotationSystem {
     fn event(&self, event: &Event) {
         let player_entity_id = match PLAYER_ENTITY_ID.read().unwrap().as_ref() {
             Some(id) => id.clone(),
@@ -21,13 +21,13 @@ impl System for CameraRotationSystem {
             None => return,
         };
 
-        query_by_id!(player_entity_id, (Camera), |camera| {
+        query_by_id!(player_entity_id, (CameraComponent), |camera| {
             camera.add_rotation_delta(pitch_delta, yaw_delta);
         });
     }
 }
 
-impl System for MovementSystem {
+impl SystemTrait for MovementSystem {
     fn event(&self, event: &Event) {
         let player_entity_id = match PLAYER_ENTITY_ID.read().unwrap().as_ref() {
             Some(id) => id.clone(),
@@ -65,7 +65,7 @@ impl System for MovementSystem {
 
         const STEP: f32 = 0.1;
 
-        query_by_id!(player_entity_id, (Camera), |camera| {
+        query_by_id!(player_entity_id, (CameraComponent), |camera| {
             match (fwd, back, left, right) {
                 (true, false, false, false) => camera.move_forward(STEP),
                 (false, true, false, false) => camera.move_back(STEP),

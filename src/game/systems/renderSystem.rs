@@ -1,16 +1,11 @@
 use glow::HasContext;
 
 // Import types and functions from parent scope
-use crate::index::Transform;
-use crate::index::StaticObject3D;
-use crate::index::AnimatedObject3D;
-use crate::index::animated_object3d::AnimationType;
-use crate::index::System;
-use crate::index::mat4x4_perspective;
-use crate::index::mat4x4_mul;
-use crate::index::mat4x4_identity;
-use crate::index::node_world_txfm;
-use crate::index::{PLAYER_ENTITY_ID, Camera};
+use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, SystemTrait, CameraComponent};
+use crate::index::engine::components::SharedComponents::Transform;
+use crate::index::engine::components::AnimatedObject3D::AnimationType;
+use crate::index::engine::utils::{mat4x4_perspective, mat4x4_mul, mat4x4_identity, node_world_txfm};
+use crate::index::PLAYER_ENTITY_ID;
 
 #[derive(Debug)]
 pub struct RenderSystem;
@@ -32,7 +27,7 @@ impl RenderSystem {
             };
 
             // Get camera - early return if None  
-            let camera = match get_query_by_id!(player_id, (Camera)) {
+            let camera = match get_query_by_id!(player_id, (CameraComponent)) {
                 Some(cam) => cam,
                 None => return,
             };
@@ -54,7 +49,7 @@ impl RenderSystem {
     }
 
     fn render_animated_objects(gl: &glow::Context, view_proj: &[f32; 16]) {
-        query!((Transform, AnimatedObject3D), |_id, transform, animated_object| {
+        query!((Transform, AnimatedObject3DComponent), |_id, transform, animated_object| {
             Self::setup_viewport_uniform(gl, view_proj, animated_object.material.shader_program);
             
             // Use shader directly from material
@@ -65,18 +60,18 @@ impl RenderSystem {
             // Update animation
             {
                 // Convert to the types expected by the animator
-                let animation_channels: Vec<crate::index::animated_object3d::AnimationChannel> =
+                let animation_channels: Vec<crate::index::engine::components::AnimatedObject3D::AnimationChannel> =
                     animated_object.animation_channels
                         .iter()
-                        .map(|ch| crate::index::animated_object3d::AnimationChannel {
+                        .map(|ch| crate::index::engine::components::AnimatedObject3D::AnimationChannel {
                             target: ch.target,
                             animation_type: match ch.animation_type {
                                 AnimationType::Translation =>
-                                    crate::index::animated_object3d::AnimationType::Translation,
+                                    crate::index::engine::components::AnimatedObject3D::AnimationType::Translation,
                                 AnimationType::Rotation =>
-                                    crate::index::animated_object3d::AnimationType::Rotation,
+                                    crate::index::engine::components::AnimatedObject3D::AnimationType::Rotation,
                                 AnimationType::Scale =>
-                                    crate::index::animated_object3d::AnimationType::Scale,
+                                    crate::index::engine::components::AnimatedObject3D::AnimationType::Scale,
                             },
                             num_timesteps: ch.num_timesteps,
                             times: ch.times.clone(),
@@ -85,10 +80,10 @@ impl RenderSystem {
                         .collect();
 
                 // Convert skeleton to the expected type
-                let mut skeleton_converted = crate::index::animated_object3d::Skeleton {
+                let mut skeleton_converted = crate::index::engine::components::AnimatedObject3D::Skeleton {
                     nodes: animated_object.skeleton.nodes
                         .iter()
-                        .map(|n| crate::index::animated_object3d::Node {
+                        .map(|n| crate::index::engine::components::AnimatedObject3D::Node {
                             translation: n.translation,
                             rotation: n.rotation,
                             scale: n.scale,
@@ -131,10 +126,10 @@ impl RenderSystem {
                     }
                     inverse_bone_matrices[i] = animated_object.skeleton.joint_inverse_mats[i];
                     // Convert nodes to the expected type for the math function
-                    let nodes_converted: Vec<crate::index::animated_object3d::Node> =
+                    let nodes_converted: Vec<crate::index::engine::components::AnimatedObject3D::Node> =
                         animated_object.skeleton.nodes
                             .iter()
-                            .map(|n| crate::index::animated_object3d::Node {
+                            .map(|n| crate::index::engine::components::AnimatedObject3D::Node {
                                 translation: n.translation,
                                 rotation: n.rotation,
                                 scale: n.scale,
@@ -185,7 +180,7 @@ impl RenderSystem {
     }
 
     fn render_static_objects(gl: &glow::Context, view_proj: &[f32; 16]) {
-        query!((Transform, StaticObject3D), |_id, transform, static_object| {
+        query!((Transform, StaticObject3DComponent), |_id, transform, static_object| {
             Self::setup_viewport_uniform(gl, view_proj, static_object.material.shader_program);
             
             // Use shader directly from material
@@ -236,7 +231,7 @@ impl RenderSystem {
     }
 }
 
-impl System for RenderSystem {
+impl SystemTrait for RenderSystem {
     fn update(&self) {
         // This will be called by the system manager, but we need gl context
         // The actual rendering will be called from index.rs with proper parameters

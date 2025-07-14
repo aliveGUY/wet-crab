@@ -1,5 +1,5 @@
 // Import shared components
-use crate::index::shared_components::{Mesh, Material};
+use crate::index::engine::components::SharedComponents::{Mesh, Material};
 
 // Import animation-specific components
 mod skeleton_mod {

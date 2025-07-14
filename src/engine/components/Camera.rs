@@ -1,5 +1,5 @@
-use crate::index::math::{Mat4x4, build_view_matrix};
-use crate::index::Transform;
+use crate::index::engine::utils::math::{Mat4x4, build_view_matrix};
+use crate::index::engine::components::SharedComponents::Transform;
 use std::sync::RwLock;
 
 #[derive(Debug)]

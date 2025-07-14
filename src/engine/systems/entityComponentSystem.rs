@@ -580,10 +580,10 @@ impl<T: Component> Insertable for T {
 macro_rules! insert_many {
     ($entity:expr $(, $comp:expr)+ $(,)?) => {
         {
-        use std::boxed::Box; use crate::index::entity_component_system::Insertable;
-        let mut v: Vec<Box<dyn crate::index::entity_component_system::Insertable>> = Vec::new();
+        use std::boxed::Box; use crate::index::engine::systems::entityComponentSystem::Insertable;
+        let mut v: Vec<Box<dyn crate::index::engine::systems::entityComponentSystem::Insertable>> = Vec::new();
         $( v.push(Box::new($comp)); )+
-        crate::index::entity_component_system::world().insert_dyn(&$entity, v);
+        crate::index::engine::systems::entityComponentSystem::world().insert_dyn(&$entity, v);
         }
     };
 }
@@ -935,34 +935,34 @@ impl World {
 #[macro_export]
 macro_rules! query {
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty, $c10:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident, $a10:ident | $body:block) => {
-        crate::index::entity_component_system::world().query10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident | $body:block) => {
-        crate::index::entity_component_system::world().query9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident | $body:block) => {
-        crate::index::entity_component_system::world().query8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident | $body:block) => {
-        crate::index::entity_component_system::world().query7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident | $body:block) => {
-        crate::index::entity_component_system::world().query6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(|$id, $a1, $a2, $a3, $a4, $a5, $a6| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(|$id, $a1, $a2, $a3, $a4, $a5, $a6| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
-        crate::index::entity_component_system::world().query5::<_, $c1, $c2, $c3, $c4, $c5>(|$id, $a1, $a2, $a3, $a4, $a5| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query5::<_, $c1, $c2, $c3, $c4, $c5>(|$id, $a1, $a2, $a3, $a4, $a5| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
-        crate::index::entity_component_system::world().query4::<_, $c1, $c2, $c3, $c4>(|$id, $a1, $a2, $a3, $a4| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query4::<_, $c1, $c2, $c3, $c4>(|$id, $a1, $a2, $a3, $a4| $body)
     };
     (($c1:ty, $c2:ty, $c3:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident | $body:block) => {
-        crate::index::entity_component_system::world().query3::<_, $c1, $c2, $c3>(|$id, $a1, $a2, $a3| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query3::<_, $c1, $c2, $c3>(|$id, $a1, $a2, $a3| $body)
     };
     (($c1:ty, $c2:ty), | $id:ident, $a1:ident, $a2:ident | $body:block) => {
-        crate::index::entity_component_system::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
     };
     (($c1:ty), | $id:ident, $a1:ident | $body:block) => {
-        crate::index::entity_component_system::world().query1::<_, $c1>(|$id, $a1| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query1::<_, $c1>(|$id, $a1| $body)
     };
 }
 
@@ -970,34 +970,34 @@ macro_rules! query {
 #[macro_export]
 macro_rules! query_by_id {
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty, $c10:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident, $a10:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id5::<_, $c1, $c2, $c3, $c4, $c5>(&$eid, |$a1, $a2, $a3, $a4, $a5| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id5::<_, $c1, $c2, $c3, $c4, $c5>(&$eid, |$a1, $a2, $a3, $a4, $a5| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id4::<_, $c1, $c2, $c3, $c4>(&$eid, |$a1, $a2, $a3, $a4| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id4::<_, $c1, $c2, $c3, $c4>(&$eid, |$a1, $a2, $a3, $a4| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty), | $a1:ident, $a2:ident, $a3:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id3::<_, $c1, $c2, $c3>(&$eid, |$a1, $a2, $a3| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id3::<_, $c1, $c2, $c3>(&$eid, |$a1, $a2, $a3| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty), | $a1:ident, $a2:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
     };
     ($eid:expr, ($c1:ty), | $a1:ident | $body:block) => {
-        crate::index::entity_component_system::world().query_by_id1::<_, $c1>(&$eid, |$a1| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_by_id1::<_, $c1>(&$eid, |$a1| $body)
     };
 }
 
@@ -1006,7 +1006,7 @@ macro_rules! query_by_id {
 macro_rules! get_query_by_id {
     ($eid:expr, ($c1:ty)) => {
         {
-            let world = crate::index::entity_component_system::WORLD.read().expect("world lock");
+            let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
             world.get_component_readonly::<$c1>(&$eid).cloned()
         }
     };

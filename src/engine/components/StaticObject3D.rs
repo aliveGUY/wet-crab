@@ -1,5 +1,5 @@
 // Import shared components
-use crate::index::shared_components::{Mesh, Material};
+use crate::index::engine::components::SharedComponents::{Mesh, Material};
 
 #[derive(Clone)]
 pub struct StaticObject3D {

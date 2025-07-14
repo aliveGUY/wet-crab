@@ -1,4 +1,4 @@
-use crate::index::math::{ Mat4x4, mat4x4_identity, mat4x4_translate, mat4x4_from_quat, mat4x4_mul };
+use crate::index::engine::utils::math::{ Mat4x4, mat4x4_identity, mat4x4_translate, mat4x4_from_quat, mat4x4_mul };
 
 // Transform component for 3D objects - simplified matrix-based approach
 #[derive(Clone, Debug)]

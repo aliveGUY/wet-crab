@@ -1,5 +1,5 @@
-use crate::index::animated_object3d::{Skeleton, AnimationChannel, AnimationType, Node};
-use crate::index::math::lerp;
+use crate::index::engine::components::AnimatedObject3D::{Skeleton, AnimationChannel, AnimationType, Node};
+use crate::index::engine::utils::math::lerp;
 
 #[derive(Clone)]
 pub struct Animator {
