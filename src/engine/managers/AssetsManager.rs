@@ -2,11 +2,10 @@ use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use glow::HasContext;
 
-// Import required components - using the shared components
-use crate::index::static_object3d::StaticObject3D;
-use crate::index::animated_object3d::AnimatedObject3D;
-use crate::index::shared_components::{Transform, Mesh, Material};
-use crate::index::gltf_loader_utils::*;
+// Import required components - using the new module structure
+use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent};
+use crate::index::engine::components::SharedComponents::{Transform, Mesh, Material};
+use crate::index::engine::utils::GLTFLoaderUtils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Assets {
@@ -15,8 +14,8 @@ pub enum Assets {
 }
 
 pub struct AssetsManager {
-    static_assets: HashMap<Assets, StaticObject3D>,
-    animated_assets: HashMap<Assets, AnimatedObject3D>,
+    static_assets: HashMap<Assets, StaticObject3DComponent>,
+    animated_assets: HashMap<Assets, AnimatedObject3DComponent>,
     static_shader_program: Option<glow::Program>,
     animated_shader_program: Option<glow::Program>,
     initialized: bool,
@@ -83,7 +82,7 @@ impl AssetsManager {
         println!("✅ AssetsManager initialization complete. Loaded {} assets.", total_assets);
     }
 
-    pub fn get_static_object_copy(&self, asset_name: Assets) -> StaticObject3D {
+    pub fn get_static_object_copy(&self, asset_name: Assets) -> StaticObject3DComponent {
         if !self.initialized {
             panic!("❌ AssetsManager not initialized! Call initialize_asset_manager() first.");
         }
@@ -96,7 +95,7 @@ impl AssetsManager {
         }
     }
 
-    pub fn get_animated_object_copy(&self, asset_name: Assets) -> AnimatedObject3D {
+    pub fn get_animated_object_copy(&self, asset_name: Assets) -> AnimatedObject3DComponent {
         if !self.initialized {
             panic!("❌ AssetsManager not initialized! Call initialize_asset_manager() first.");
         }
@@ -134,7 +133,7 @@ impl AssetsManager {
         let mut transform = Transform::new();
         transform.translate(0.0, 0.0, 0.0); // Default position
 
-        let static_object = StaticObject3D::new(mesh, material);
+        let static_object = StaticObject3DComponent::new(mesh, material);
 
         // Store in static assets map
         self.static_assets.insert(asset_name, static_object);
@@ -168,7 +167,7 @@ impl AssetsManager {
         let mut transform = Transform::new();
         transform.translate(0.0, 0.0, 0.0); // Default position
 
-        let animated_object = AnimatedObject3D::new(
+        let animated_object = AnimatedObject3DComponent::new(
             mesh, 
             material, 
             skeleton, 
@@ -259,10 +258,10 @@ pub fn initialize_asset_manager(gl: &glow::Context) {
     ASSETS_MANAGER.lock().unwrap().initialize_asset_manager(gl)
 }
 
-pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3D {
+pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3DComponent {
     ASSETS_MANAGER.lock().unwrap().get_static_object_copy(asset_name)
 }
 
-pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3D {
+pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3DComponent {
     ASSETS_MANAGER.lock().unwrap().get_animated_object_copy(asset_name)
 }

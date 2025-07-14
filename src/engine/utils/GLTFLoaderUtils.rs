@@ -1,8 +1,8 @@
 use gltf::buffer::Data;
 use glow::HasContext;
-use crate::index::shared_components::{Mesh, Material};
-use crate::index::animated_object3d::{Skeleton, Node, AnimationChannel, AnimationType};
-use crate::index::math::mat4x4_transpose;
+use crate::index::engine::components::SharedComponents::{Mesh, Material};
+use crate::index::engine::components::AnimatedObject3D::{Skeleton, Node, AnimationChannel, AnimationType};
+use crate::index::engine::utils::math::mat4x4_transpose;
 
 pub fn extract_mesh(
     gl: &glow::Context,

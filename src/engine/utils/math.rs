@@ -175,7 +175,7 @@ pub fn build_view_matrix(pos: [f32; 3], pitch: f32, yaw: f32) -> Mat4x4 {
 }
 
 // Calculate world transform for a node in a skeleton hierarchy
-pub fn node_world_txfm(nodes: &[crate::index::animated_object3d::Node], idx: usize) -> Mat4x4 {
+pub fn node_world_txfm(nodes: &[crate::index::engine::components::AnimatedObject3D::Node], idx: usize) -> Mat4x4 {
     let node = &nodes[idx];
 
     let mut node_txfm = mat4x4_scale(node.scale[0], node.scale[1], node.scale[2]);
