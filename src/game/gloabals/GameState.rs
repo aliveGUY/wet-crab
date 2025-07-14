@@ -50,7 +50,7 @@ fn build_view_matrix(pos: [f32; 3], pitch: f32, yaw: f32) -> Mat4x4 {
     let cy = yaw.cos();
     let sy = yaw.sin();
 
-    let forward = [sy * cp, -sp, -cy * cp];
+    let forward = [-sy * cp, sp, cy * cp];
     let right = [cy, 0.0, sy];
     let up = [sy * sp, cp, -cy * sp];
 
@@ -123,7 +123,7 @@ fn basis_from_yaw(yaw: f32) -> ([f32; 3], [f32; 3], [f32; 3]) {
     let cy = yaw.cos();
     let sy = yaw.sin();
 
-    let forward = [sy, 0.0, -cy];
+    let forward = [-sy, 0.0, cy];
     let right = [cy, 0.0, sy];
     let up = [0.0, 1.0, 0.0];
 
