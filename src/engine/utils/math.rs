@@ -151,6 +151,29 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a * (1.0 - t) + b * t
 }
 
+// Build view matrix from position and Euler angles
+pub fn build_view_matrix(pos: [f32; 3], pitch: f32, yaw: f32) -> Mat4x4 {
+    let cp = pitch.cos();
+    let sp = pitch.sin();
+    let cy = yaw.cos();
+    let sy = yaw.sin();
+
+    let forward = [-sy * cp, sp, cy * cp];
+    let right = [cy, 0.0, sy];
+    let up = [sy * sp, cp, -cy * sp];
+
+    let tx = -(right[0] * pos[0] + right[1] * pos[1] + right[2] * pos[2]);
+    let ty = -(up[0] * pos[0] + up[1] * pos[1] + up[2] * pos[2]);
+    let tz = -(forward[0] * pos[0] + forward[1] * pos[1] + forward[2] * pos[2]);
+
+    [
+        right[0],   right[1],   right[2],   tx,
+        up[0],      up[1],      up[2],      ty,
+        forward[0], forward[1], forward[2], tz,
+        0.0,        0.0,        0.0,        1.0,
+    ]
+}
+
 // Calculate world transform for a node in a skeleton hierarchy
 pub fn node_world_txfm(nodes: &[crate::index::animated_object3d::Node], idx: usize) -> Mat4x4 {
     let node = &nodes[idx];

@@ -51,7 +51,7 @@ pub type EntityId = String;
 
 // ——————————————————————————————————————————————————————————— global state ————
 
-static WORLD: Lazy<RwLock<World>> = Lazy::new(|| RwLock::new(World::default()));
+pub static WORLD: Lazy<RwLock<World>> = Lazy::new(|| RwLock::new(World::default()));
 pub fn world() -> RwLockWriteGuard<'static, World> {
     WORLD.write().expect("world lock")
 }
@@ -141,6 +141,51 @@ impl World {
         for c in comps {
             c.insert_into(self, id);
         }
+    }
+
+    // Single component access for specific entity
+    fn get_component_for_entity<T: Component>(
+        &mut self,
+        entity_id: &EntityId
+    ) -> Option<&mut T> {
+        let bit = self.registry.bit_for::<T>();
+        let mask = 1u64 << bit;
+
+        if let Some(&entity_mask) = self.meta.get(entity_id) {
+            if (entity_mask & mask) == mask {
+                let store = self.stores
+                    .get_mut(&TypeId::of::<T>())
+                    .unwrap()
+                    .downcast_mut::<Store<T>>()
+                    .unwrap();
+                return store.get_mut(entity_id);
+            }
+        }
+        None
+    }
+
+    // Read-only single component access
+    pub fn get_component_readonly<T: Component>(
+        &self,
+        entity_id: &EntityId
+    ) -> Option<&T> {
+        // We need to check if the component type is already registered
+        let type_id = TypeId::of::<T>();
+        
+        // Find the bit for this component type
+        let bit = self.registry.bits.get(&type_id)?;
+        let mask = 1u64 << bit;
+
+        if let Some(&entity_mask) = self.meta.get(entity_id) {
+            if (entity_mask & mask) == mask {
+                let store = self.stores
+                    .get(&type_id)?
+                    .downcast_ref::<Store<T>>()
+                    .unwrap();
+                return store.0.get(entity_id);
+            }
+        }
+        None
     }
 
     // Helper method to get component stores for specific entity
@@ -546,6 +591,34 @@ macro_rules! insert_many {
 // Simple macro implementation without paste crate
 
 impl World {
+    // Single component query methods
+    pub fn query1<F, C1>(&mut self, mut f: F)
+        where C1: Component, F: FnMut(&EntityId, &mut C1)
+    {
+        let bit1 = self.registry.bit_for::<C1>();
+        let mask = 1u64 << bit1;
+
+        let entities: Vec<EntityId> = self.meta
+            .iter()
+            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for entity_id in entities {
+            if let Some(c1) = self.get_component_for_entity::<C1>(&entity_id) {
+                f(&entity_id, c1);
+            }
+        }
+    }
+
+    pub fn query_by_id1<F, C1>(&mut self, id: &EntityId, mut f: F)
+        where C1: Component, F: FnMut(&mut C1)
+    {
+        if let Some(c1) = self.get_component_for_entity::<C1>(id) {
+            f(c1);
+        }
+    }
+
     pub fn query2<F, C1, C2>(&mut self, mut f: F)
         where C1: Component, C2: Component, F: FnMut(&EntityId, &mut C1, &mut C2)
     {
@@ -888,36 +961,53 @@ macro_rules! query {
     (($c1:ty, $c2:ty), | $id:ident, $a1:ident, $a2:ident | $body:block) => {
         crate::index::entity_component_system::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
     };
+    (($c1:ty), | $id:ident, $a1:ident | $body:block) => {
+        crate::index::entity_component_system::world().query1::<_, $c1>(|$id, $a1| $body)
+    };
 }
 
 
 #[macro_export]
 macro_rules! query_by_id {
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty, $c10:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident, $a10:ident | $body:block) => {
-        $crate::world().query_by_id10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
+        crate::index::entity_component_system::world().query_by_id10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident | $body:block) => {
-        $crate::world().query_by_id9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
+        crate::index::entity_component_system::world().query_by_id9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident | $body:block) => {
-        $crate::world().query_by_id8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
+        crate::index::entity_component_system::world().query_by_id8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident | $body:block) => {
-        $crate::world().query_by_id7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
+        crate::index::entity_component_system::world().query_by_id7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident | $body:block) => {
-        $crate::world().query_by_id6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6| $body)
+        crate::index::entity_component_system::world().query_by_id6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
-        $crate::world().query_by_id5::<_, $c1, $c2, $c3, $c4, $c5>(&$eid, |$a1, $a2, $a3, $a4, $a5| $body)
+        crate::index::entity_component_system::world().query_by_id5::<_, $c1, $c2, $c3, $c4, $c5>(&$eid, |$a1, $a2, $a3, $a4, $a5| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
-        $crate::world().query_by_id4::<_, $c1, $c2, $c3, $c4>(&$eid, |$a1, $a2, $a3, $a4| $body)
+        crate::index::entity_component_system::world().query_by_id4::<_, $c1, $c2, $c3, $c4>(&$eid, |$a1, $a2, $a3, $a4| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty, $c3:ty), | $a1:ident, $a2:ident, $a3:ident | $body:block) => {
-        $crate::world().query_by_id3::<_, $c1, $c2, $c3>(&$eid, |$a1, $a2, $a3| $body)
+        crate::index::entity_component_system::world().query_by_id3::<_, $c1, $c2, $c3>(&$eid, |$a1, $a2, $a3| $body)
     };
     ($eid:expr, ($c1:ty, $c2:ty), | $a1:ident, $a2:ident | $body:block) => {
-        $crate::world().query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
+        crate::index::entity_component_system::world().query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
+    };
+    ($eid:expr, ($c1:ty), | $a1:ident | $body:block) => {
+        crate::index::entity_component_system::world().query_by_id1::<_, $c1>(&$eid, |$a1| $body)
+    };
+}
+
+// New get_query_by_id! macro - returns read-only components instead of using callback
+#[macro_export]
+macro_rules! get_query_by_id {
+    ($eid:expr, ($c1:ty)) => {
+        {
+            let world = crate::index::entity_component_system::WORLD.read().expect("world lock");
+            world.get_component_readonly::<$c1>(&$eid).cloned()
+        }
     };
 }

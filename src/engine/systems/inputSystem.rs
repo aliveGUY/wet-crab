@@ -48,7 +48,7 @@ impl DesktopInputHandler {
 impl InputHandler for DesktopInputHandler {
     fn receive_mouse_event(&self, raw_event: &dyn Any) -> Option<Event> {
         if let Some(position) = raw_event.downcast_ref::<(i32, i32)>() {
-                let euler_deltas = crate::index::inputUtils::mouse_delta_to_euler(
+                let euler_deltas = crate::index::input_utils::mouse_delta_to_euler(
                 position.0 as f64,
                 position.1 as f64
             );
@@ -92,7 +92,7 @@ impl InputHandler for BrowserInputHandler {
 
                 if movement_x != 0 || movement_y != 0 {
                     let euler_deltas =
-                        crate::index::inputUtils::mouse_delta_to_euler(
+                        crate::index::input_utils::mouse_delta_to_euler(
                             movement_x as f64,
                             movement_y as f64
                         );

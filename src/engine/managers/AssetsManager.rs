@@ -14,7 +14,7 @@ pub enum Assets {
     Chair,
 }
 
-struct AssetsManager {
+pub struct AssetsManager {
     static_assets: HashMap<Assets, StaticObject3D>,
     animated_assets: HashMap<Assets, AnimatedObject3D>,
     static_shader_program: Option<glow::Program>,
@@ -83,7 +83,7 @@ impl AssetsManager {
         println!("✅ AssetsManager initialization complete. Loaded {} assets.", total_assets);
     }
 
-    fn get_static_object_copy(&self, asset_name: Assets) -> StaticObject3D {
+    pub fn get_static_object_copy(&self, asset_name: Assets) -> StaticObject3D {
         if !self.initialized {
             panic!("❌ AssetsManager not initialized! Call initialize_asset_manager() first.");
         }
@@ -96,7 +96,7 @@ impl AssetsManager {
         }
     }
 
-    fn get_animated_object_copy(&self, asset_name: Assets) -> AnimatedObject3D {
+    pub fn get_animated_object_copy(&self, asset_name: Assets) -> AnimatedObject3D {
         if !self.initialized {
             panic!("❌ AssetsManager not initialized! Call initialize_asset_manager() first.");
         }
@@ -250,7 +250,7 @@ fn create_shader_program(
 
 
 // Global singleton instance
-static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {
+pub static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {
     std::sync::Mutex::new(AssetsManager::new())
 });
 

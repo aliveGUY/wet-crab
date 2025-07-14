@@ -9,8 +9,8 @@ use crate::index::System;
 use crate::index::mat4x4_perspective;
 use crate::index::mat4x4_mul;
 use crate::index::mat4x4_identity;
-use crate::index::get_camera_transform;
 use crate::index::node_world_txfm;
+use crate::index::{PLAYER_ENTITY_ID, Camera};
 
 #[derive(Debug)]
 pub struct RenderSystem;
@@ -23,11 +23,26 @@ impl RenderSystem {
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
 
+        // Get player ID and camera in one scope to avoid lifetime issues
+        let view_matrix = {
+            let player_id_guard = PLAYER_ENTITY_ID.read().unwrap();
+            let player_id = match player_id_guard.as_ref() {
+                Some(id) => id,
+                None => return,
+            };
+
+            // Get camera - early return if None  
+            let camera = match get_query_by_id!(player_id, (Camera)) {
+                Some(cam) => cam,
+                None => return,
+            };
+
+            // Get view matrix while we have the camera reference
+            camera.get_view_matrix()
+        };
         let fov = (90.0_f32).to_radians();
         let aspect_ratio = (width as f32) / (height as f32);
         let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
-
-        let view_matrix = get_camera_transform();
         let view_proj = mat4x4_mul(projection_matrix, view_matrix);
 
         Self::render_animated_objects(gl, &view_proj);

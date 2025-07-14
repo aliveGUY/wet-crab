@@ -1,4 +1,7 @@
+use std::sync::{ Arc, RwLock };
+
 use glow::HasContext;
+use once_cell::sync::Lazy;
 
 #[macro_use]
 mod entity_component_system {
@@ -7,7 +10,7 @@ mod entity_component_system {
 use entity_component_system::*;
 
 mod transform {
-    include!("engine/components/Tranform.rs");
+    include!("engine/components/Transform.rs");
 }
 use transform::Transform;
 
@@ -15,55 +18,58 @@ mod collider {
     include!("engine/components/Collider.rs");
 }
 use collider::Collider;
+mod camera {
+    include!("engine/components/Camera.rs");
+}
+use camera::Camera;
+
+mod static_object3d {
+    include!("engine/components/StaticObject3D.rs");
+}
+use static_object3d::StaticObject3D;
+
+mod animated_object3d {
+    include!("engine/components/AnimatedObject3D.rs");
+}
+use animated_object3d::AnimatedObject3D;
+
+mod system_trait {
+    include!("engine/components/System.rs");
+}
+use system_trait::System;
 
 mod math {
     include!("engine/utils/math.rs");
 }
 use math::*;
 
-mod inputUtils {
-    include!("engine/utils/inputUtils.rs");
+mod input_utils {
+    include!("engine/utils/input_utils.rs");
+}
+
+mod gltf_loader_utils {
+    include!("engine/utils/GLTFLoaderUtils.rs");
 }
 
 mod shared_components {
     include!("engine/components/SharedComponents.rs");
 }
 
-mod static_object3d {
-    include!("engine/components/StaticObject3D.rs");
-}
-
-mod animated_object3d {
-    include!("engine/components/AnimatedObject3D.rs");
-}
-
-use static_object3d::StaticObject3D;
-use animated_object3d::AnimatedObject3D;
-
-mod gltf_loader_utils {
-    include!("engine/utils/GLTFLoaderUtils.rs");
-}
-
 mod assets_manager {
     include!("engine/managers/AssetsManager.rs");
 }
-
-mod game_state {
-    include!("game/gloabals/GameState.rs");
-}
-
 use assets_manager::{
     initialize_asset_manager,
     get_static_object_copy,
     get_animated_object_copy,
     Assets,
+    ASSETS_MANAGER,
 };
-use game_state::{ initialize_game_state, get_camera_transform };
 
-mod system_trait {
-    include!("engine/components/System.rs");
+mod event_system {
+    include!("engine/systems/eventSystem.rs");
 }
-use system_trait::System;
+use event_system::{ EventSystem, EventType };
 
 mod render_system {
     include!("game/systems/renderSystem.rs");
@@ -80,12 +86,6 @@ mod movement_systems {
 }
 use movement_systems::{ MovementSystem, CameraRotationSystem };
 
-
-mod event_system {
-    include!("engine/systems/eventSystem.rs");
-}
-pub use event_system::{ EventSystem, EventType };
-
 pub mod engine {
     pub mod systems {
         pub use super::super::entity_component_system::*;
@@ -98,6 +98,8 @@ pub mod engine {
     }
 }
 
+pub static PLAYER_ENTITY_ID: Lazy<RwLock<Option<EntityId>>> = Lazy::new(|| RwLock::new(None));
+
 pub struct Program {
     gl: glow::Context,
 }
@@ -105,23 +107,26 @@ pub struct Program {
 impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
         initialize_asset_manager(&gl);
-        initialize_game_state();
 
-        let chair_entity = spawn();
-        let chair_object = get_static_object_copy(Assets::Chair);
-        let mut chair_transform = Transform::new();
-        let mut chair_collider = Collider::new();
+        let chair_entity_id = spawn();
+        insert_many!(
+            chair_entity_id,
+            get_static_object_copy(Assets::Chair),
+            Transform::with_translation(2.0, -3.0, -5.0),
+            Collider::new()
+        );
 
-        chair_transform.translate(2.0, -3.0, -5.0);
-        insert_many!(chair_entity, chair_object, chair_transform, chair_collider);
+        let doll_entity_id = spawn();
+        insert_many!(
+            doll_entity_id,
+            get_animated_object_copy(Assets::TestingDoll),
+            Transform::with_translation(-2.0, -3.0, -5.0)
+        );
 
-        let doll_entity = spawn();
-        let doll_object = get_animated_object_copy(Assets::TestingDoll);
-        let mut doll_transform = Transform::new();
-        doll_transform.translate(-2.0, -3.0, -5.0);
-        insert_many!(doll_entity, doll_object, doll_transform);
+        let player_entity_id = spawn();
+        *PLAYER_ENTITY_ID.write().unwrap() = Some(player_entity_id.clone());
+        insert_many!(player_entity_id, Camera::new());
 
-        use std::sync::Arc;
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
@@ -131,9 +136,7 @@ impl Program {
 
         println!("✅ Program initialized successfully with ECS-based architecture");
 
-        Ok(Self {
-            gl,
-        })
+        Ok(Self { gl })
     }
 
     pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
@@ -141,8 +144,6 @@ impl Program {
         ColliderSystem::update();
         Ok(())
     }
-
-
 
     #[allow(dead_code)]
     pub fn cleanup(&self) {
