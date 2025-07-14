@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 #[path = "engine/mod.rs"]
 #[macro_use]
 pub mod engine;
-#[path = "game/mod.rs"] 
+#[path = "game/mod.rs"]
 pub mod game;
 
 use engine::*;
@@ -26,19 +26,20 @@ impl Program {
         insert_many!(
             chair_entity_id,
             get_static_object_copy(Assets::Chair),
-            engine::components::SharedComponents::Transform::with_translation(2.0, -3.0, -5.0)
+            TransformComponent::with_translation(2.0, -3.0, -5.0),
+            ColliderComponent::new()
         );
 
         let doll_entity_id = spawn();
         insert_many!(
             doll_entity_id,
             get_animated_object_copy(Assets::TestingDoll),
-            engine::components::SharedComponents::Transform::with_translation(-2.0, -3.0, -5.0)
+            TransformComponent::with_translation(-2.0, -3.0, -5.0)
         );
 
         let player_entity_id = spawn();
         *PLAYER_ENTITY_ID.write().unwrap() = Some(player_entity_id.clone());
-        insert_many!(player_entity_id, engine::components::CameraComponent::new());
+        insert_many!(player_entity_id, CameraComponent::new());
 
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
@@ -54,6 +55,7 @@ impl Program {
 
     pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
         RenderSystem::update(&self.gl, width, height);
+        ColliderSystem::update();
         Ok(())
     }
 

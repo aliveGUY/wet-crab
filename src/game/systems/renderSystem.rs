@@ -1,8 +1,7 @@
 use glow::HasContext;
 
 // Import types and functions from parent scope
-use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, SystemTrait, CameraComponent};
-use crate::index::engine::components::SharedComponents::Transform;
+use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, SystemTrait, CameraComponent, TransformComponent};
 use crate::index::engine::components::AnimatedObject3D::AnimationType;
 use crate::index::engine::utils::{mat4x4_perspective, mat4x4_mul, mat4x4_identity, node_world_txfm};
 use crate::index::PLAYER_ENTITY_ID;
@@ -49,7 +48,7 @@ impl RenderSystem {
     }
 
     fn render_animated_objects(gl: &glow::Context, view_proj: &[f32; 16]) {
-        query!((Transform, AnimatedObject3DComponent), |_id, transform, animated_object| {
+        query!((TransformComponent, AnimatedObject3DComponent), |_id, transform, animated_object| {
             Self::setup_viewport_uniform(gl, view_proj, animated_object.material.shader_program);
             
             // Use shader directly from material
@@ -180,7 +179,7 @@ impl RenderSystem {
     }
 
     fn render_static_objects(gl: &glow::Context, view_proj: &[f32; 16]) {
-        query!((Transform, StaticObject3DComponent), |_id, transform, static_object| {
+        query!((TransformComponent, StaticObject3DComponent), |_id, transform, static_object| {
             Self::setup_viewport_uniform(gl, view_proj, static_object.material.shader_program);
             
             // Use shader directly from material
