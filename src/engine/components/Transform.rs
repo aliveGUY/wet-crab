@@ -1,7 +1,7 @@
-use crate::index::math::{Mat4x4, mat4x4_identity, mat4x4_translate, mat4x4_from_quat, mat4x4_mul};
+use crate::index::math::{ Mat4x4, mat4x4_identity, mat4x4_translate, mat4x4_from_quat, mat4x4_mul };
 
 // Transform component for 3D objects - simplified matrix-based approach
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Transform {
     matrix: Mat4x4,
 }
@@ -10,6 +10,12 @@ impl Transform {
     pub fn new() -> Self {
         Self {
             matrix: mat4x4_identity(),
+        }
+    }
+
+    pub fn with_translation(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            matrix: mat4x4_translate(x, y, z),
         }
     }
 
@@ -30,6 +36,11 @@ impl Transform {
     /// Get the transformation matrix
     pub fn get_matrix(&self) -> &Mat4x4 {
         &self.matrix
+    }
+
+    /// Get mutable reference to the transformation matrix
+    pub fn get_matrix_mut(&mut self) -> &mut Mat4x4 {
+        &mut self.matrix
     }
 }
 

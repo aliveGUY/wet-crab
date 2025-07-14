@@ -2,7 +2,7 @@
 
 // Re-export the shared components
 mod transform_mod {
-    include!("Tranform.rs");
+    include!("Transform.rs");
 }
 mod mesh_mod {
     include!("Mesh.rs");
