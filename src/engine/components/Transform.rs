@@ -38,6 +38,10 @@ impl Transform {
         &self.matrix
     }
 
+    pub fn get_position_xy(&self) -> [f32; 2] {
+        [self.matrix[12], self.matrix[14]]
+    }
+
     /// Get mutable reference to the transformation matrix
     pub fn get_matrix_mut(&mut self) -> &mut Mat4x4 {
         &mut self.matrix

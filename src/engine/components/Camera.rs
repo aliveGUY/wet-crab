@@ -1,10 +1,10 @@
 use crate::index::engine::utils::math::{Mat4x4, build_view_matrix};
-use crate::index::engine::components::SharedComponents::Transform;
+use crate::index::engine::components::TransformComponent;
 use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct Camera {
-    transform: RwLock<Transform>,
+    transform: RwLock<TransformComponent>,
     position: RwLock<[f32; 3]>,
     pitch: RwLock<f32>,
     yaw: RwLock<f32>,
@@ -15,7 +15,7 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Self {
-            transform: RwLock::new(Transform::new()),
+            transform: RwLock::new(TransformComponent::new()),
             position: RwLock::new([0.0, 0.0, 0.0]),
             pitch: RwLock::new(0.0),
             yaw: RwLock::new(0.0),
@@ -122,7 +122,7 @@ impl Camera {
             
             // Update transform with new matrix
             let mut transform = self.transform.write().unwrap();
-            *transform = Transform::new();
+            *transform = TransformComponent::new();
             // Note: We're storing the view matrix directly in the transform
             // This is a bit of a hack, but maintains compatibility
             *transform.get_matrix_mut() = view_matrix;
