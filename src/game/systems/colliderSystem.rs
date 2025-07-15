@@ -5,7 +5,6 @@ pub struct ColliderSystem;
 impl ColliderSystem {
     pub fn update() {
         query!((TransformComponent, ColliderComponent), |_id, transform, collider| {
-            println!("🔍 Entity at position");
         });
     }
 }

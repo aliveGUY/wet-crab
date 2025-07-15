@@ -11,11 +11,11 @@ pub struct RenderSystem;
 
 impl RenderSystem {
     pub fn update(gl: &glow::Context, width: u32, height: u32) {
-        unsafe {
-            gl.viewport(0, 0, width as i32, height as i32);
-            gl.clear_color(0.1, 0.1, 0.1, 1.0);
-            gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-        }
+        // unsafe {
+        //     gl.viewport(0, 0, width as i32, height as i32);
+        //     gl.clear_color(0.1, 0.1, 0.1, 1.0);
+        //     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+        // }
 
         // Get player ID and camera in one scope to avoid lifetime issues
         let view_matrix = {
