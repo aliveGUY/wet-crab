@@ -1,0 +1,291 @@
+//! Game Debug UI for runst-poc
+//! 
+//! This UI provides a debug overlay on top of OpenGL rendering,
+//! featuring real-time game state monitoring and controls.
+
+export component GameDebugUI inherits Window {
+    // Game state properties
+    in-out property <string> wasd_state: "idle";
+    in-out property <string> mouse_position: "(0, 0)";
+    in-out property <string> camera_rotation: "(0, 0, 0)";
+    in-out property <int> fps: 60;
+    in-out property <int> entity_count: 2;
+    in-out property <bool> wireframe_mode: false;
+    in-out property <float> animation_speed: 1.0;
+    
+    // Callbacks for Rust integration
+    callback toggle_wireframe();
+    callback reset_camera();
+    callback set_animation_speed(float);
+    
+    preferred-width: 400px;
+    preferred-height: 600px;
+    min-width: 300px;
+    max-width: 500px;
+    min-height: 400px;
+    background: transparent;
+    
+    // Main debug panel layout
+    VerticalLayout {
+        alignment: start;
+        spacing: 10px;
+        padding: 15px;
+        
+        // Header
+        Rectangle {
+            background: rgba(33, 150, 243, 0.9);
+            border-radius: 8px;
+            height: 50px;
+            
+            Text {
+                text: "🎮 Game Debug Panel";
+                font-size: 18px;
+                font-weight: 700;
+                color: white;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+        
+        // Input State Section
+        Rectangle {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: rgba(255, 255, 255, 0.2);
+            
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+                
+                Text {
+                    text: "📋 Input State";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #4CAF50;
+                }
+                
+                Text {
+                    text: "WASD: " + wasd_state;
+                    font-size: 12px;
+                    color: white;
+                }
+                
+                Text {
+                    text: "Mouse: " + mouse_position;
+                    font-size: 12px;
+                    color: white;
+                }
+                
+                Text {
+                    text: "Camera: " + camera_rotation;
+                    font-size: 12px;
+                    color: white;
+                }
+            }
+        }
+        
+        // Performance Section
+        Rectangle {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: rgba(255, 255, 255, 0.2);
+            
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+                
+                Text {
+                    text: "⚡ Performance";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #FF9800;
+                }
+                
+                Text {
+                    text: "FPS: " + fps;
+                    font-size: 12px;
+                    color: white;
+                }
+                
+                Text {
+                    text: "Entities: " + entity_count;
+                    font-size: 12px;
+                    color: white;
+                }
+            }
+        }
+        
+        // Scene Controls Section
+        Rectangle {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: rgba(255, 255, 255, 0.2);
+            
+            VerticalLayout {
+                padding: 12px;
+                spacing: 12px;
+                
+                Text {
+                    text: "🎛️ Scene Controls";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #9C27B0;
+                }
+                
+                // Wireframe toggle
+                HorizontalLayout {
+                    spacing: 10px;
+                    
+                    Text {
+                        text: "Wireframe:";
+                        font-size: 12px;
+                        color: white;
+                        vertical-alignment: center;
+                    }
+                    
+                    TouchArea {
+                        width: 60px;
+                        height: 25px;
+                        
+                        Rectangle {
+                            background: wireframe_mode ? #4CAF50 : #757575;
+                            border-radius: 12px;
+                            
+                            animate background { duration: 200ms; }
+                            
+                            Text {
+                                text: wireframe_mode ? "ON" : "OFF";
+                                font-size: 10px;
+                                color: white;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                        
+                        clicked => {
+                            wireframe_mode = !wireframe_mode;
+                            toggle_wireframe();
+                        }
+                    }
+                }
+                
+                // Animation speed slider
+                HorizontalLayout {
+                    spacing: 10px;
+                    
+                    Text {
+                        text: "Anim Speed:";
+                        font-size: 12px;
+                        color: white;
+                        vertical-alignment: center;
+                    }
+                    
+                    Rectangle {
+                        background: rgba(255, 255, 255, 0.1);
+                        border-radius: 3px;
+                        height: 20px;
+                        
+                        TouchArea {
+                            property <float> slider_value: animation_speed;
+                            
+                            moved => {
+                                if (self.pressed) {
+                                    slider_value = Math.max(0.1, Math.min(3.0, self.mouse-x / self.width * 3.0));
+                                    animation_speed = slider_value;
+                                    set_animation_speed(slider_value);
+                                }
+                            }
+                            
+                            Rectangle {
+                                x: (animation_speed / 3.0) * parent.width - self.width / 2;
+                                width: 15px;
+                                height: parent.height;
+                                background: #2196F3;
+                                border-radius: 2px;
+                            }
+                        }
+                    }
+                    
+                    Text {
+                        text: Math.round(animation_speed * 10) / 10;
+                        font-size: 10px;
+                        color: #B0B0B0;
+                        vertical-alignment: center;
+                        min-width: 25px;
+                    }
+                }
+                
+                // Reset camera button
+                TouchArea {
+                    height: 30px;
+                    
+                    Rectangle {
+                        background: parent.has-hover ? #1976D2 : #2196F3;
+                        border-radius: 4px;
+                        
+                        animate background { duration: 150ms; }
+                        
+                        Text {
+                            text: "🔄 Reset Camera";
+                            font-size: 12px;
+                            color: white;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                    
+                    clicked => {
+                        reset_camera();
+                    }
+                }
+            }
+        }
+        
+        // Instructions Section
+        Rectangle {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: rgba(255, 255, 255, 0.2);
+            
+            VerticalLayout {
+                padding: 12px;
+                spacing: 6px;
+                
+                Text {
+                    text: "ℹ️ Controls";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #607D8B;
+                }
+                
+                Text {
+                    text: "WASD - Movement";
+                    font-size: 11px;
+                    color: #B0B0B0;
+                }
+                
+                Text {
+                    text: "Mouse - Camera Look";
+                    font-size: 11px;
+                    color: #B0B0B0;
+                }
+                
+                Text {
+                    text: "Left Click - Lock Cursor";
+                    font-size: 11px;
+                    color: #B0B0B0;
+                }
+                
+                Text {
+                    text: "Escape - Unlock Cursor";
+                    font-size: 11px;
+                    color: #B0B0B0;
+                }
+            }
+        }
+    }
+}
