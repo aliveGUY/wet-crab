@@ -1,291 +1,212 @@
-//! Game Debug UI for runst-poc
-//! 
-//! This UI provides a debug overlay on top of OpenGL rendering,
-//! featuring real-time game state monitoring and controls.
+import { ScrollView } from "std-widgets.slint";
+import { Button } from "std-widgets.slint";
+
+global Colors {
+    out property <color> panel-background: #17181ba4;
+    out property <color> card-background: #202124;
+    out property <color> input-background: #282a2d;
+    out property <color> input-border: #5f6368;
+    out property <color> button-background: #282a2d;
+    out property <color> card-background-selected: yellow;
+    out property <color> text-color: white;
+    out property <color> text-color-selected: black;
+}
+
+global InterfaceState {
+    in-out property <int> selected-index: -1;
+    in-out property <string> selected-title: "";
+}
+
+component EnitityListItem {
+    in property <string> title;
+    in property <int> index;
+
+    TouchArea {
+        width: 100%;
+        mouse-cursor: pointer;
+        Rectangle {
+            border-radius: 6px;
+            background: InterfaceState.selected-index == index ? Colors.card-background-selected : Colors.card-background;
+            border-width: 1px;
+            border-color: parent.has-hover ? Colors.card-background-selected : Colors.card-background;
+            VerticalLayout {
+                padding-top: 8px;
+                padding-bottom: 8px;
+                padding-left: 12px;
+                padding-right: 12px;
+
+                Text {
+                    width: 100%;
+                    text: root.title;
+                    color: InterfaceState.selected-index == index ? Colors.text-color-selected : Colors.text-color;
+                    font-size: 16px;
+                    vertical-alignment: center;
+                    horizontal-alignment: left;
+                }
+            }
+        }
+
+        clicked => {
+            InterfaceState.selected-index = index;
+            InterfaceState.selected-title = root.title;
+        }
+    }
+}
+
+component Textfield {
+    in property <string> label;
+    in property <string> value;
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 4px;
+        height: self.preferred-height;
+
+        Text {
+            font-size: 16px;
+            width: 100%;
+            text: root.label;
+        }
+
+        Rectangle {
+            background: Colors.input-background;
+            border-radius: 4px;
+            border-color: Colors.input-border;
+            border-width: 1px;
+
+            VerticalLayout {
+                padding: 4px;
+                height: self.preferred-height;
+
+                TextInput {
+                    text: root.value;
+                    vertical-alignment: center;
+                    font-size: 16px;
+                }
+            }
+        }
+    }
+}
+
+component ComponentListItem {
+    Rectangle {
+        border-radius: 6px;
+        background: Colors.card-background;
+
+        VerticalLayout {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            Text {
+                text: "Transform";
+                font-size: 16px;
+                width: 100%;
+                horizontal-alignment: center;
+            }
+
+            Textfield {
+                label: "X position";
+                value: "0.0";
+            }
+
+            Textfield {
+                label: "Y position";
+                value: "0.0";
+            }
+
+            Textfield {
+                label: "Z position";
+                value: "0.0";
+            }
+
+            Textfield {
+                label: "X rotation";
+                value: "0";
+            }
+
+            Textfield {
+                label: "Y rotation";
+                value: "0";
+            }
+
+            Textfield {
+                label: "Z rotation";
+                value: "0";
+            }
+        }
+    }
+}
+
+component Panel {
+    Rectangle {
+        background: Colors.panel-background;
+        border-radius: 12px;
+        ScrollView {
+            height: 100%;
+            width: 300px;
+            VerticalLayout {
+                alignment: start;
+                spacing: 10px;
+                padding: 8px;
+
+                @children
+            }
+        }
+    }
+}
 
 export component GameDebugUI inherits Window {
-    // Game state properties
-    in-out property <string> wasd_state: "idle";
-    in-out property <string> mouse_position: "(0, 0)";
-    in-out property <string> camera_rotation: "(0, 0, 0)";
-    in-out property <int> fps: 60;
-    in-out property <int> entity_count: 2;
-    in-out property <bool> wireframe_mode: false;
-    in-out property <float> animation_speed: 1.0;
-    
-    // Callbacks for Rust integration
-    callback toggle_wireframe();
-    callback reset_camera();
-    callback set_animation_speed(float);
-    
-    preferred-width: 400px;
-    preferred-height: 600px;
-    min-width: 300px;
-    max-width: 500px;
-    min-height: 400px;
+    min-width: 800px;
+    min-height: 600px;
     background: transparent;
-    
-    // Main debug panel layout
-    VerticalLayout {
-        alignment: start;
+
+    HorizontalLayout {
+        width: 100%;
         spacing: 10px;
         padding: 15px;
-        
-        // Header
-        Rectangle {
-            background: rgba(33, 150, 243, 0.9);
-            border-radius: 8px;
-            height: 50px;
-            
+        alignment: space-between;
+
+        Panel {
+            height: 100%;
+            width: 300px;
+
+            for i in 40: EnitityListItem {
+                title: "Item " + (i + 1);
+                index: i;
+            }
+        }
+
+        if InterfaceState.selected-index != -1:Panel {
+            height: 100%;
+            width: 300px;
+
+            TouchArea {
+                height: 20px;
+                mouse-cursor: pointer;
+                Rectangle {
+                    border-radius: 6px;
+                    background: Colors.button-background;
+
+                    Text {
+                        text: "Close";
+                        color: Colors.text-color;
+                        font-size: 16px;
+                    }
+                }
+
+                clicked => {
+                    InterfaceState.selected-index = -1;
+                }
+            }
+
             Text {
-                text: "🎮 Game Debug Panel";
-                font-size: 18px;
-                font-weight: 700;
-                color: white;
+                width: 100%;
                 horizontal-alignment: center;
-                vertical-alignment: center;
+                text: InterfaceState.selected-title;
+                font-size: 24px;
+                color: Colors.card-background-selected;
             }
-        }
-        
-        // Input State Section
-        Rectangle {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: rgba(255, 255, 255, 0.2);
-            
-            VerticalLayout {
-                padding: 12px;
-                spacing: 8px;
-                
-                Text {
-                    text: "📋 Input State";
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #4CAF50;
-                }
-                
-                Text {
-                    text: "WASD: " + wasd_state;
-                    font-size: 12px;
-                    color: white;
-                }
-                
-                Text {
-                    text: "Mouse: " + mouse_position;
-                    font-size: 12px;
-                    color: white;
-                }
-                
-                Text {
-                    text: "Camera: " + camera_rotation;
-                    font-size: 12px;
-                    color: white;
-                }
-            }
-        }
-        
-        // Performance Section
-        Rectangle {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: rgba(255, 255, 255, 0.2);
-            
-            VerticalLayout {
-                padding: 12px;
-                spacing: 8px;
-                
-                Text {
-                    text: "⚡ Performance";
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #FF9800;
-                }
-                
-                Text {
-                    text: "FPS: " + fps;
-                    font-size: 12px;
-                    color: white;
-                }
-                
-                Text {
-                    text: "Entities: " + entity_count;
-                    font-size: 12px;
-                    color: white;
-                }
-            }
-        }
-        
-        // Scene Controls Section
-        Rectangle {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: rgba(255, 255, 255, 0.2);
-            
-            VerticalLayout {
-                padding: 12px;
-                spacing: 12px;
-                
-                Text {
-                    text: "🎛️ Scene Controls";
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #9C27B0;
-                }
-                
-                // Wireframe toggle
-                HorizontalLayout {
-                    spacing: 10px;
-                    
-                    Text {
-                        text: "Wireframe:";
-                        font-size: 12px;
-                        color: white;
-                        vertical-alignment: center;
-                    }
-                    
-                    TouchArea {
-                        width: 60px;
-                        height: 25px;
-                        
-                        Rectangle {
-                            background: wireframe_mode ? #4CAF50 : #757575;
-                            border-radius: 12px;
-                            
-                            animate background { duration: 200ms; }
-                            
-                            Text {
-                                text: wireframe_mode ? "ON" : "OFF";
-                                font-size: 10px;
-                                color: white;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-                        
-                        clicked => {
-                            wireframe_mode = !wireframe_mode;
-                            toggle_wireframe();
-                        }
-                    }
-                }
-                
-                // Animation speed slider
-                HorizontalLayout {
-                    spacing: 10px;
-                    
-                    Text {
-                        text: "Anim Speed:";
-                        font-size: 12px;
-                        color: white;
-                        vertical-alignment: center;
-                    }
-                    
-                    Rectangle {
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 3px;
-                        height: 20px;
-                        
-                        TouchArea {
-                            property <float> slider_value: animation_speed;
-                            
-                            moved => {
-                                if (self.pressed) {
-                                    slider_value = Math.max(0.1, Math.min(3.0, self.mouse-x / self.width * 3.0));
-                                    animation_speed = slider_value;
-                                    set_animation_speed(slider_value);
-                                }
-                            }
-                            
-                            Rectangle {
-                                x: (animation_speed / 3.0) * parent.width - self.width / 2;
-                                width: 15px;
-                                height: parent.height;
-                                background: #2196F3;
-                                border-radius: 2px;
-                            }
-                        }
-                    }
-                    
-                    Text {
-                        text: Math.round(animation_speed * 10) / 10;
-                        font-size: 10px;
-                        color: #B0B0B0;
-                        vertical-alignment: center;
-                        min-width: 25px;
-                    }
-                }
-                
-                // Reset camera button
-                TouchArea {
-                    height: 30px;
-                    
-                    Rectangle {
-                        background: parent.has-hover ? #1976D2 : #2196F3;
-                        border-radius: 4px;
-                        
-                        animate background { duration: 150ms; }
-                        
-                        Text {
-                            text: "🔄 Reset Camera";
-                            font-size: 12px;
-                            color: white;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-                    }
-                    
-                    clicked => {
-                        reset_camera();
-                    }
-                }
-            }
-        }
-        
-        // Instructions Section
-        Rectangle {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: rgba(255, 255, 255, 0.2);
-            
-            VerticalLayout {
-                padding: 12px;
-                spacing: 6px;
-                
-                Text {
-                    text: "ℹ️ Controls";
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #607D8B;
-                }
-                
-                Text {
-                    text: "WASD - Movement";
-                    font-size: 11px;
-                    color: #B0B0B0;
-                }
-                
-                Text {
-                    text: "Mouse - Camera Look";
-                    font-size: 11px;
-                    color: #B0B0B0;
-                }
-                
-                Text {
-                    text: "Left Click - Lock Cursor";
-                    font-size: 11px;
-                    color: #B0B0B0;
-                }
-                
-                Text {
-                    text: "Escape - Unlock Cursor";
-                    font-size: 11px;
-                    color: #B0B0B0;
-                }
-            }
+
+            for i in 10: ComponentListItem { }
         }
     }
 }
