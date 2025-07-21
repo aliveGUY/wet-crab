@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Slint UI using Winit backend
     println!("[DEBUG] Creating Slint debug UI...");
-    let ui_app = GameDebugUI::new().expect("Failed to create Slint UI");
+    let ui_app = LevelEditorUI::new().expect("Failed to create Slint UI");
     println!("[DEBUG] Slint UI created successfully");
 
     // Initialize input state for hybrid input system
