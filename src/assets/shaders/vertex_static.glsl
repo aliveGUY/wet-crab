@@ -1,4 +1,4 @@
-#VERSION
+#version 300 es
 layout(location = 0) in vec3 vNorm;
 layout(location = 1) in vec3 vPos;
 layout(location = 4) in vec2 vTexCoord;

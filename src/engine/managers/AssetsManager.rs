@@ -180,17 +180,6 @@ impl AssetsManager {
     }
 }
 
-// Platform-specific shader version detection
-fn get_shader_version() -> &'static str {
-    #[cfg(target_arch = "wasm32")]
-    {
-        "#version 300 es\nprecision mediump float;"
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        "#version 330 core"
-    }
-}
 
 // Shader creation functions
 fn compile_shader(
@@ -219,13 +208,10 @@ fn create_shader_program(
     program_name: &str
 ) -> glow::Program {
     unsafe {
-        // Handle version injection internally
-        let vs_src = vertex_shader_source.replace("#VERSION", get_shader_version());
-        let fs_src = fragment_shader_source.replace("#VERSION", get_shader_version());
-
-        let vs = compile_shader(gl, glow::VERTEX_SHADER, vs_src)
+        // Use shader sources directly (no version replacement needed)
+        let vs = compile_shader(gl, glow::VERTEX_SHADER, vertex_shader_source.to_string())
             .unwrap_or_else(|e| panic!("Failed to compile {} vertex shader: {}", program_name, e));
-        let fs = compile_shader(gl, glow::FRAGMENT_SHADER, fs_src)
+        let fs = compile_shader(gl, glow::FRAGMENT_SHADER, fragment_shader_source.to_string())
             .unwrap_or_else(|e| panic!("Failed to compile {} fragment shader: {}", program_name, e));
 
         let program = gl.create_program()
