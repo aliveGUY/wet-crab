@@ -13,9 +13,31 @@ pub struct RenderSystem;
 impl RenderSystem {
     pub fn update(gl: &glow::Context, width: u32, height: u32) {
         unsafe {
+            // Set viewport for current frame
             gl.viewport(0, 0, width as i32, height as i32);
+            
+            // Clear both color and depth buffers
             gl.clear_color(0.1, 0.1, 0.1, 1.0);
+            gl.clear_depth_f32(1.0); // Clear depth to far plane
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            
+            // Verify depth testing is enabled and configured correctly
+            if !gl.is_enabled(glow::DEPTH_TEST) {
+                eprintln!("[WARNING] Depth testing is disabled in RenderSystem!");
+                gl.enable(glow::DEPTH_TEST);
+            }
+            
+            // Ensure proper depth function
+            let current_depth_func = gl.get_parameter_i32(glow::DEPTH_FUNC);
+            if current_depth_func != glow::LESS as i32 {
+                gl.depth_func(glow::LESS);
+            }
+            
+            // Ensure depth writes are enabled
+            let depth_writemask = gl.get_parameter_i32(glow::DEPTH_WRITEMASK);
+            if depth_writemask == 0 {
+                gl.depth_mask(true);
+            }
         }
 
         // Get player ID and camera in one scope to avoid lifetime issues
