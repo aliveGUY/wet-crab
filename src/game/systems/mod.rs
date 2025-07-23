@@ -1,6 +1,6 @@
-pub mod renderSystem;
-pub mod movementSystem;
+pub mod render_system;
+pub mod movement_system;
 
 // Re-export commonly used types
-pub use renderSystem::RenderSystem;
-pub use movementSystem::{MovementSystem, CameraRotationSystem};
+pub use render_system::RenderSystem;
+pub use movement_system::{MovementSystem, CameraRotationSystem};

@@ -1,4 +1,4 @@
-use crate::index::engine::components::AnimatedObject3D::{Skeleton, AnimationChannel, AnimationType, Node};
+use crate::index::engine::components::AnimatedObject3D::{Skeleton, AnimationChannel, AnimationType};
 use crate::index::engine::utils::math::lerp;
 
 #[derive(Clone)]

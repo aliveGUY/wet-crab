@@ -5,6 +5,4 @@
 /pkg
 
 build/dev/pkg
-src/main.rs
 src/lib.rs
-Cargo.toml

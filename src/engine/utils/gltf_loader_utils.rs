@@ -156,7 +156,7 @@ pub fn extract_skeleton(
     }
 }
 
-pub fn extract_animation_channels(gltf: &gltf::Gltf, buffers: &[Data], asset_name: &str) -> Vec<AnimationChannel> {
+pub fn extract_animation_channels(gltf: &gltf::Gltf, buffers: &[Data], _asset_name: &str) -> Vec<AnimationChannel> {
     gltf.animations()
         .next()
         .map(|anim| {
@@ -228,19 +228,6 @@ fn decode_png_with_crate(png_data: &[u8]) -> Result<(u32, u32, Vec<u8>), Box<dyn
     Ok((width, height, pixels))
 }
 
-// Helper function to determine if GLTF has skeletal data
-pub fn has_skeletal_data(gltf: &gltf::Gltf) -> bool {
-    // Check if any mesh primitive has joints and weights
-    for mesh in gltf.meshes() {
-        for primitive in mesh.primitives() {
-            if primitive.get(&gltf::Semantic::Joints(0)).is_some() && 
-               primitive.get(&gltf::Semantic::Weights(0)).is_some() {
-                return true;
-            }
-        }
-    }
-    false
-}
 
 pub fn extract_material(
     gl: &glow::Context,

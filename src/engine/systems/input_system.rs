@@ -1,7 +1,7 @@
 use std::sync::{ Arc, OnceLock };
 use std::any::Any;
 use std::collections::HashMap;
-use crate::index::engine::systems::eventSystem::{ Event, EventSystem, EventType };
+use crate::index::engine::systems::event_system::{ Event, EventSystem, EventType };
 
 // Import Winit types for enhanced DesktopInputHandler
 use winit::event::{WindowEvent, ElementState};
@@ -10,6 +10,8 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 pub trait InputHandler: Send + Sync {
     fn receive_mouse_event(&self, raw_event: &dyn Any) -> Option<Event>;
     fn receive_key_event(&self, raw_event: &dyn Any) -> Option<Event>;
+    fn receive_mouse_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event>;
+    fn receive_key_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event>;
 }
 
 static INPUT_SYSTEM: OnceLock<InputSystem> = OnceLock::new();
@@ -37,6 +39,18 @@ impl InputSystem {
 
     pub fn receive_key_event(&self, raw_event: &dyn Any) {
         if let Some(event) = self.handler.receive_key_event(raw_event) {
+            EventSystem::notify(event);
+        }
+    }
+
+    pub fn receive_mouse_event_owned(&self, raw_event: Box<dyn Any>) {
+        if let Some(event) = self.handler.receive_mouse_event_owned(raw_event) {
+            EventSystem::notify(event);
+        }
+    }
+
+    pub fn receive_key_event_owned(&self, raw_event: Box<dyn Any>) {
+        if let Some(event) = self.handler.receive_key_event_owned(raw_event) {
             EventSystem::notify(event);
         }
     }
@@ -117,7 +131,7 @@ impl DesktopInputHandler {
     }
     
     /// Process mouse button clicks (no cursor lock functionality)
-    fn process_mouse_button(&self, button: winit::event::MouseButton, state: ElementState) -> Option<Event> {
+    fn process_mouse_button(&self, _button: winit::event::MouseButton, _state: ElementState) -> Option<Event> {
         // Mouse buttons no longer handle cursor lock - just pass through
         None
     }
@@ -263,15 +277,31 @@ impl InputHandler for DesktopInputHandler {
 
         None
     }
+
+    fn receive_mouse_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event> {
+        // Handle Winit WindowEvent with owned values
+        if let Ok(window_event) = raw_event.downcast::<WindowEvent>() {
+            return match *window_event {
+                WindowEvent::CursorMoved { position, .. } => self.process_cursor_moved(&position),
+                WindowEvent::MouseInput { state, button, .. } => self.process_mouse_button(button, state),
+                _ => None,
+            };
+        }
+        None
+    }
+
+    fn receive_key_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event> {
+        // Handle Winit KeyEvent with owned values
+        if let Ok(keyboard_event) = raw_event.downcast::<winit::event::KeyEvent>() {
+            return self.process_keyboard_input(&keyboard_event);
+        }
+        None
+    }
 }
 
 pub struct BrowserInputHandler {}
 
-impl BrowserInputHandler {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+impl BrowserInputHandler {}
 
 impl InputHandler for BrowserInputHandler {
     fn receive_mouse_event(&self, raw_event: &dyn Any) -> Option<Event> {
@@ -333,6 +363,16 @@ impl InputHandler for BrowserInputHandler {
             }
         }
 
+        None
+    }
+
+    fn receive_mouse_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event> {
+        // For browser, just delegate to the reference version for now
+        None
+    }
+
+    fn receive_key_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event> {
+        // For browser, just delegate to the reference version for now
         None
     }
 }

@@ -5,7 +5,7 @@ use glow::HasContext;
 // Import required components - using the new module structure
 use crate::index::engine::components::{ StaticObject3DComponent, AnimatedObject3DComponent };
 use crate::index::engine::components::SharedComponents::{ Transform };
-use crate::index::engine::utils::GLTFLoaderUtils::*;
+use crate::index::engine::utils::gltf_loader_utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Assets {

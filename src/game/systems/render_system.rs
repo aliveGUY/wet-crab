@@ -254,9 +254,9 @@ impl RenderSystem {
 }
 
 impl SystemTrait for RenderSystem {
-    fn update(&self) {
-        // This will be called by the system manager, but we need gl context
-        // The actual rendering will be called from index.rs with proper parameters
-        panic!("RenderSystem::update() should not be called directly. Use RenderSystem::update(gl, width, height) instead.");
+    fn update() {
+        // This static method can be called directly: RenderSystem::update()
+        // However, for rendering we need GL context, so we use the static method with parameters instead
+        // The actual rendering is called from index.rs with RenderSystem::update(gl, width, height)
     }
 }
