@@ -188,378 +188,84 @@ impl World {
         None
     }
 
-    // Helper method to get component stores for specific entity
-    fn get_component_stores_for_entity<T1: Component, T2: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2)> {
-        let bit1 = self.registry.bit_for::<T1>();
-        let bit2 = self.registry.bit_for::<T2>();
-        let mask = (1u64 << bit1) | (1u64 << bit2);
+}
 
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<
-                        TypeId,
-                        Box<dyn Any + Send + Sync>
-                    >;
+// —————————————————————————————————————————— query traits ————————
 
-                    let store1 = (*stores_ptr)
-                        .get_mut(&TypeId::of::<T1>())
-                        .unwrap()
-                        .downcast_mut::<Store<T1>>()
-                        .unwrap();
-                    let store2 = (*stores_ptr)
-                        .get_mut(&TypeId::of::<T2>())
-                        .unwrap()
-                        .downcast_mut::<Store<T2>>()
-                        .unwrap();
+/// Trait for types that can be used as query parameters in the ECS.
+/// This enables variadic queries by implementing the trait for tuples recursively.
+pub trait QueryParam {
+    /// The type returned when fetching components for this query parameter.
+    type Output<'w>;
+    
+    /// Compute the combined bitmask for all component types in this query.
+    fn mask_bits(registry: &mut ComponentRegistry) -> u64;
+    
+    /// Fetch the components for a given entity, returning None if any required component is missing.
+    fn fetch_components<'w>(world: &'w mut World, entity: &EntityId) -> Option<Self::Output<'w>>;
+}
 
-                    let comp1 = store1.get_mut(entity_id)?;
-                    let comp2 = store2.get_mut(entity_id)?;
-
-                    return Some((comp1, comp2));
-                }
-            }
-        }
-        None
+// Implementation for single mutable component references
+impl<T: Component> QueryParam for &mut T {
+    type Output<'w> = &'w mut T;
+    
+    fn mask_bits(registry: &mut ComponentRegistry) -> u64 {
+        1u64 << registry.bit_for::<T>()
     }
-
-    fn get_component_stores_for_entity3<T1: Component, T2: Component, T3: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3)> {
-        let bit1 = self.registry.bit_for::<T1>();
-        let bit2 = self.registry.bit_for::<T2>();
-        let bit3 = self.registry.bit_for::<T3>();
-        let mask = (1u64 << bit1) | (1u64 << bit2) | (1u64 << bit3);
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<
-                        TypeId,
-                        Box<dyn Any + Send + Sync>
-                    >;
-
-                    let store1 = (*stores_ptr)
-                        .get_mut(&TypeId::of::<T1>())
-                        .unwrap()
-                        .downcast_mut::<Store<T1>>()
-                        .unwrap();
-                    let store2 = (*stores_ptr)
-                        .get_mut(&TypeId::of::<T2>())
-                        .unwrap()
-                        .downcast_mut::<Store<T2>>()
-                        .unwrap();
-                    let store3 = (*stores_ptr)
-                        .get_mut(&TypeId::of::<T3>())
-                        .unwrap()
-                        .downcast_mut::<Store<T3>>()
-                        .unwrap();
-
-                    let comp1 = store1.get_mut(entity_id)?;
-                    let comp2 = store2.get_mut(entity_id)?;
-                    let comp3 = store3.get_mut(entity_id)?;
-
-                    return Some((comp1, comp2, comp3));
-                }
-            }
-        }
-        None
+    
+    fn fetch_components<'w>(world: &'w mut World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        world.get_component_for_entity::<T>(entity)
     }
+}
 
-    fn get_component_stores_for_entity4<T1: Component, T2: Component, T3: Component, T4: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4)> {
-        let bit1 = self.registry.bit_for::<T1>();
-        let bit2 = self.registry.bit_for::<T2>();
-        let bit3 = self.registry.bit_for::<T3>();
-        let bit4 = self.registry.bit_for::<T4>();
-        let mask = (1u64 << bit1) | (1u64 << bit2) | (1u64 << bit3) | (1u64 << bit4);
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-
-                    let comp1 = store1.get_mut(entity_id)?;
-                    let comp2 = store2.get_mut(entity_id)?;
-                    let comp3 = store3.get_mut(entity_id)?;
-                    let comp4 = store4.get_mut(entity_id)?;
-
-                    return Some((comp1, comp2, comp3, comp4));
-                }
-            }
-        }
-        None
+// Implementation for single immutable component references
+impl<T: Component> QueryParam for &T {
+    type Output<'w> = &'w T;
+    
+    fn mask_bits(registry: &mut ComponentRegistry) -> u64 {
+        1u64 << registry.bit_for::<T>()
     }
-
-    fn get_component_stores_for_entity5<T1: Component, T2: Component, T3: Component, T4: Component, T5: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4, &mut T5)> {
-        let bit1 = self.registry.bit_for::<T1>();
-        let bit2 = self.registry.bit_for::<T2>();
-        let bit3 = self.registry.bit_for::<T3>();
-        let bit4 = self.registry.bit_for::<T4>();
-        let bit5 = self.registry.bit_for::<T5>();
-        let mask = (1u64 << bit1) | (1u64 << bit2) | (1u64 << bit3) | (1u64 << bit4) | (1u64 << bit5);
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-                    let store5 = (*stores_ptr).get_mut(&TypeId::of::<T5>()).unwrap().downcast_mut::<Store<T5>>().unwrap();
-
-                    let comp1 = store1.get_mut(entity_id)?;
-                    let comp2 = store2.get_mut(entity_id)?;
-                    let comp3 = store3.get_mut(entity_id)?;
-                    let comp4 = store4.get_mut(entity_id)?;
-                    let comp5 = store5.get_mut(entity_id)?;
-
-                    return Some((comp1, comp2, comp3, comp4, comp5));
-                }
-            }
+    
+    fn fetch_components<'w>(world: &'w mut World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        // For immutable access, we need to work around the mutable world reference
+        // This is a limitation of the current design - we'll use unsafe to get immutable access
+        unsafe {
+            let world_ptr = world as *const World;
+            (*world_ptr).get_component_readonly::<T>(entity)
         }
-        None
     }
+}
 
-    fn get_component_stores_for_entity6<T1: Component, T2: Component, T3: Component, T4: Component, T5: Component, T6: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4, &mut T5, &mut T6)> {
-        let bits = [
-            self.registry.bit_for::<T1>(),
-            self.registry.bit_for::<T2>(),
-            self.registry.bit_for::<T3>(),
-            self.registry.bit_for::<T4>(),
-            self.registry.bit_for::<T5>(),
-            self.registry.bit_for::<T6>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-                    let store5 = (*stores_ptr).get_mut(&TypeId::of::<T5>()).unwrap().downcast_mut::<Store<T5>>().unwrap();
-                    let store6 = (*stores_ptr).get_mut(&TypeId::of::<T6>()).unwrap().downcast_mut::<Store<T6>>().unwrap();
-
-                    return Some((
-                        store1.get_mut(entity_id)?,
-                        store2.get_mut(entity_id)?,
-                        store3.get_mut(entity_id)?,
-                        store4.get_mut(entity_id)?,
-                        store5.get_mut(entity_id)?,
-                        store6.get_mut(entity_id)?,
-                    ));
-                }
-            }
-        }
-        None
+// Implementation for single-element tuples
+impl<Q: QueryParam> QueryParam for (Q,) {
+    type Output<'w> = (Q::Output<'w>,);
+    
+    fn mask_bits(registry: &mut ComponentRegistry) -> u64 {
+        Q::mask_bits(registry)
     }
-
-    fn get_component_stores_for_entity7<T1: Component, T2: Component, T3: Component, T4: Component, T5: Component, T6: Component, T7: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4, &mut T5, &mut T6, &mut T7)> {
-        let bits = [
-            self.registry.bit_for::<T1>(),
-            self.registry.bit_for::<T2>(),
-            self.registry.bit_for::<T3>(),
-            self.registry.bit_for::<T4>(),
-            self.registry.bit_for::<T5>(),
-            self.registry.bit_for::<T6>(),
-            self.registry.bit_for::<T7>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-                    let store5 = (*stores_ptr).get_mut(&TypeId::of::<T5>()).unwrap().downcast_mut::<Store<T5>>().unwrap();
-                    let store6 = (*stores_ptr).get_mut(&TypeId::of::<T6>()).unwrap().downcast_mut::<Store<T6>>().unwrap();
-                    let store7 = (*stores_ptr).get_mut(&TypeId::of::<T7>()).unwrap().downcast_mut::<Store<T7>>().unwrap();
-
-                    return Some((
-                        store1.get_mut(entity_id)?,
-                        store2.get_mut(entity_id)?,
-                        store3.get_mut(entity_id)?,
-                        store4.get_mut(entity_id)?,
-                        store5.get_mut(entity_id)?,
-                        store6.get_mut(entity_id)?,
-                        store7.get_mut(entity_id)?,
-                    ));
-                }
-            }
-        }
-        None
+    
+    fn fetch_components<'w>(world: &'w mut World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        Some((Q::fetch_components(world, entity)?,))
     }
+}
 
-    fn get_component_stores_for_entity8<T1: Component, T2: Component, T3: Component, T4: Component, T5: Component, T6: Component, T7: Component, T8: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4, &mut T5, &mut T6, &mut T7, &mut T8)> {
-        let bits = [
-            self.registry.bit_for::<T1>(),
-            self.registry.bit_for::<T2>(),
-            self.registry.bit_for::<T3>(),
-            self.registry.bit_for::<T4>(),
-            self.registry.bit_for::<T5>(),
-            self.registry.bit_for::<T6>(),
-            self.registry.bit_for::<T7>(),
-            self.registry.bit_for::<T8>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-                    let store5 = (*stores_ptr).get_mut(&TypeId::of::<T5>()).unwrap().downcast_mut::<Store<T5>>().unwrap();
-                    let store6 = (*stores_ptr).get_mut(&TypeId::of::<T6>()).unwrap().downcast_mut::<Store<T6>>().unwrap();
-                    let store7 = (*stores_ptr).get_mut(&TypeId::of::<T7>()).unwrap().downcast_mut::<Store<T7>>().unwrap();
-                    let store8 = (*stores_ptr).get_mut(&TypeId::of::<T8>()).unwrap().downcast_mut::<Store<T8>>().unwrap();
-
-                    return Some((
-                        store1.get_mut(entity_id)?,
-                        store2.get_mut(entity_id)?,
-                        store3.get_mut(entity_id)?,
-                        store4.get_mut(entity_id)?,
-                        store5.get_mut(entity_id)?,
-                        store6.get_mut(entity_id)?,
-                        store7.get_mut(entity_id)?,
-                        store8.get_mut(entity_id)?,
-                    ));
-                }
-            }
-        }
-        None
+// Recursive implementation for tuples - this enables arbitrary-length queries
+impl<Q1: QueryParam, Q2: QueryParam> QueryParam for (Q1, Q2) {
+    type Output<'w> = (Q1::Output<'w>, Q2::Output<'w>);
+    
+    fn mask_bits(registry: &mut ComponentRegistry) -> u64 {
+        Q1::mask_bits(registry) | Q2::mask_bits(registry)
     }
-
-    fn get_component_stores_for_entity9<T1: Component, T2: Component, T3: Component, T4: Component, T5: Component, T6: Component, T7: Component, T8: Component, T9: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4, &mut T5, &mut T6, &mut T7, &mut T8, &mut T9)> {
-        let bits = [
-            self.registry.bit_for::<T1>(),
-            self.registry.bit_for::<T2>(),
-            self.registry.bit_for::<T3>(),
-            self.registry.bit_for::<T4>(),
-            self.registry.bit_for::<T5>(),
-            self.registry.bit_for::<T6>(),
-            self.registry.bit_for::<T7>(),
-            self.registry.bit_for::<T8>(),
-            self.registry.bit_for::<T9>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-                    let store5 = (*stores_ptr).get_mut(&TypeId::of::<T5>()).unwrap().downcast_mut::<Store<T5>>().unwrap();
-                    let store6 = (*stores_ptr).get_mut(&TypeId::of::<T6>()).unwrap().downcast_mut::<Store<T6>>().unwrap();
-                    let store7 = (*stores_ptr).get_mut(&TypeId::of::<T7>()).unwrap().downcast_mut::<Store<T7>>().unwrap();
-                    let store8 = (*stores_ptr).get_mut(&TypeId::of::<T8>()).unwrap().downcast_mut::<Store<T8>>().unwrap();
-                    let store9 = (*stores_ptr).get_mut(&TypeId::of::<T9>()).unwrap().downcast_mut::<Store<T9>>().unwrap();
-
-                    return Some((
-                        store1.get_mut(entity_id)?,
-                        store2.get_mut(entity_id)?,
-                        store3.get_mut(entity_id)?,
-                        store4.get_mut(entity_id)?,
-                        store5.get_mut(entity_id)?,
-                        store6.get_mut(entity_id)?,
-                        store7.get_mut(entity_id)?,
-                        store8.get_mut(entity_id)?,
-                        store9.get_mut(entity_id)?,
-                    ));
-                }
-            }
+    
+    fn fetch_components<'w>(world: &'w mut World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        // We need to handle the borrowing carefully here
+        // This is complex due to Rust's borrowing rules, so we'll use unsafe
+        unsafe {
+            let world_ptr = world as *mut World;
+            let comp1 = Q1::fetch_components(&mut *world_ptr, entity)?;
+            let comp2 = Q2::fetch_components(&mut *world_ptr, entity)?;
+            Some((comp1, comp2))
         }
-        None
-    }
-
-    fn get_component_stores_for_entity10<T1: Component, T2: Component, T3: Component, T4: Component, T5: Component, T6: Component, T7: Component, T8: Component, T9: Component, T10: Component>(
-        &mut self,
-        entity_id: &EntityId
-    ) -> Option<(&mut T1, &mut T2, &mut T3, &mut T4, &mut T5, &mut T6, &mut T7, &mut T8, &mut T9, &mut T10)> {
-        let bits = [
-            self.registry.bit_for::<T1>(),
-            self.registry.bit_for::<T2>(),
-            self.registry.bit_for::<T3>(),
-            self.registry.bit_for::<T4>(),
-            self.registry.bit_for::<T5>(),
-            self.registry.bit_for::<T6>(),
-            self.registry.bit_for::<T7>(),
-            self.registry.bit_for::<T8>(),
-            self.registry.bit_for::<T9>(),
-            self.registry.bit_for::<T10>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        if let Some(&entity_mask) = self.meta.get(entity_id) {
-            if (entity_mask & mask) == mask {
-                unsafe {
-                    let stores_ptr = &mut self.stores as *mut HashMap<TypeId, Box<dyn Any + Send + Sync>>;
-                    let store1 = (*stores_ptr).get_mut(&TypeId::of::<T1>()).unwrap().downcast_mut::<Store<T1>>().unwrap();
-                    let store2 = (*stores_ptr).get_mut(&TypeId::of::<T2>()).unwrap().downcast_mut::<Store<T2>>().unwrap();
-                    let store3 = (*stores_ptr).get_mut(&TypeId::of::<T3>()).unwrap().downcast_mut::<Store<T3>>().unwrap();
-                    let store4 = (*stores_ptr).get_mut(&TypeId::of::<T4>()).unwrap().downcast_mut::<Store<T4>>().unwrap();
-                    let store5 = (*stores_ptr).get_mut(&TypeId::of::<T5>()).unwrap().downcast_mut::<Store<T5>>().unwrap();
-                    let store6 = (*stores_ptr).get_mut(&TypeId::of::<T6>()).unwrap().downcast_mut::<Store<T6>>().unwrap();
-                    let store7 = (*stores_ptr).get_mut(&TypeId::of::<T7>()).unwrap().downcast_mut::<Store<T7>>().unwrap();
-                    let store8 = (*stores_ptr).get_mut(&TypeId::of::<T8>()).unwrap().downcast_mut::<Store<T8>>().unwrap();
-                    let store9 = (*stores_ptr).get_mut(&TypeId::of::<T9>()).unwrap().downcast_mut::<Store<T9>>().unwrap();
-                    let store10 = (*stores_ptr).get_mut(&TypeId::of::<T10>()).unwrap().downcast_mut::<Store<T10>>().unwrap();
-
-                    return Some((
-                        store1.get_mut(entity_id)?,
-                        store2.get_mut(entity_id)?,
-                        store3.get_mut(entity_id)?,
-                        store4.get_mut(entity_id)?,
-                        store5.get_mut(entity_id)?,
-                        store6.get_mut(entity_id)?,
-                        store7.get_mut(entity_id)?,
-                        store8.get_mut(entity_id)?,
-                        store9.get_mut(entity_id)?,
-                        store10.get_mut(entity_id)?,
-                    ));
-                }
-            }
-        }
-        None
     }
 }
 
@@ -591,341 +297,47 @@ macro_rules! insert_many {
 // Simple macro implementation without paste crate
 
 impl World {
-    // Single component query methods
-    pub fn query1<F, C1>(&mut self, mut f: F)
-        where C1: Component, F: FnMut(&EntityId, &mut C1)
+    /// Generic query method that works with any number of components using the QueryParam trait.
+    /// This replaces all the queryN methods with a single generic implementation.
+    pub fn query<Q, F>(&mut self, f: F)
+    where
+        Q: QueryParam,
+        F: for<'w> FnMut(&EntityId, Q::Output<'w>),
     {
-        let bit1 = self.registry.bit_for::<C1>();
-        let mask = 1u64 << bit1;
-
+        // 1. Compute the combined mask for the query's component types
+        let mask = Q::mask_bits(&mut self.registry);
+        
+        // 2. Gather all entities that have at least those components (entity_mask & mask == mask)
         let entities: Vec<EntityId> = self.meta
             .iter()
             .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
             .map(|(id, _)| id.clone())
             .collect();
-
-        for entity_id in entities {
-            if let Some(c1) = self.get_component_for_entity::<C1>(&entity_id) {
-                f(&entity_id, c1);
+        
+        // 3. For each such entity, fetch the actual components and call the user closure
+        let mut f = f;
+        for id in entities {
+            if let Some(components) = Q::fetch_components(self, &id) {
+                f(&id, components);
             }
         }
     }
 
-    pub fn query_by_id1<F, C1>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, F: FnMut(&mut C1)
+    /// Generic query method for a single entity using the QueryParam trait.
+    /// This replaces all the query_by_idN methods with a single generic implementation.
+    pub fn query_one<Q, F>(&mut self, entity: &EntityId, f: F)
+    where
+        Q: QueryParam,
+        F: for<'w> FnOnce(Q::Output<'w>),
     {
-        if let Some(c1) = self.get_component_for_entity::<C1>(id) {
-            f(c1);
-        }
-    }
-
-    pub fn query2<F, C1, C2>(&mut self, mut f: F)
-        where C1: Component, C2: Component, F: FnMut(&EntityId, &mut C1, &mut C2)
-    {
-        let bit1 = self.registry.bit_for::<C1>();
-        let bit2 = self.registry.bit_for::<C2>();
-        let mask = (1u64 << bit1) | (1u64 << bit2);
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2)) = self.get_component_stores_for_entity::<C1, C2>(&entity_id) {
-                f(&entity_id, c1, c2);
+        // Ensure the entity has all components in the query mask
+        let mask = Q::mask_bits(&mut self.registry);
+        if let Some(&entity_mask) = self.meta.get(entity) {
+            if (entity_mask & mask) == mask {
+                if let Some(comps) = Q::fetch_components(self, entity) {
+                    f(comps);
+                }
             }
-        }
-    }
-
-    pub fn query_by_id2<F, C1, C2>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, F: FnMut(&mut C1, &mut C2)
-    {
-        if let Some((c1, c2)) = self.get_component_stores_for_entity::<C1, C2>(id) {
-            f(c1, c2);
-        }
-    }
-
-    pub fn query3<F, C1, C2, C3>(&mut self, mut f: F)
-        where
-            C1: Component,
-            C2: Component,
-            C3: Component,
-            F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3)
-    {
-        let bit1 = self.registry.bit_for::<C1>();
-        let bit2 = self.registry.bit_for::<C2>();
-        let bit3 = self.registry.bit_for::<C3>();
-        let mask = (1u64 << bit1) | (1u64 << bit2) | (1u64 << bit3);
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if
-                let Some((c1, c2, c3)) = self.get_component_stores_for_entity3::<C1, C2, C3>(
-                    &entity_id
-                )
-            {
-                f(&entity_id, c1, c2, c3);
-            }
-        }
-    }
-
-    pub fn query_by_id3<F, C1, C2, C3>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, F: FnMut(&mut C1, &mut C2, &mut C3)
-    {
-        if let Some((c1, c2, c3)) = self.get_component_stores_for_entity3::<C1, C2, C3>(id) {
-            f(c1, c2, c3);
-        }
-    }
-
-    pub fn query4<F, C1, C2, C3, C4>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4)) = self.get_component_stores_for_entity4::<C1, C2, C3, C4>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4);
-            }
-        }
-    }
-
-    pub fn query_by_id4<F, C1, C2, C3, C4>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4)
-    {
-        if let Some((c1, c2, c3, c4)) = self.get_component_stores_for_entity4::<C1, C2, C3, C4>(id) {
-            f(c1, c2, c3, c4);
-        }
-    }
-
-    pub fn query5<F, C1, C2, C3, C4, C5>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4, &mut C5)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-            self.registry.bit_for::<C5>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4, c5)) = self.get_component_stores_for_entity5::<C1, C2, C3, C4, C5>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4, c5);
-            }
-        }
-    }
-
-    pub fn query_by_id5<F, C1, C2, C3, C4, C5>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4, &mut C5)
-    {
-        if let Some((c1, c2, c3, c4, c5)) = self.get_component_stores_for_entity5::<C1, C2, C3, C4, C5>(id) {
-            f(c1, c2, c3, c4, c5);
-        }
-    }
-
-    pub fn query6<F, C1, C2, C3, C4, C5, C6>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-            self.registry.bit_for::<C5>(),
-            self.registry.bit_for::<C6>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4, c5, c6)) = self.get_component_stores_for_entity6::<C1, C2, C3, C4, C5, C6>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4, c5, c6);
-            }
-        }
-    }
-
-    pub fn query_by_id6<F, C1, C2, C3, C4, C5, C6>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6)
-    {
-        if let Some((c1, c2, c3, c4, c5, c6)) = self.get_component_stores_for_entity6::<C1, C2, C3, C4, C5, C6>(id) {
-            f(c1, c2, c3, c4, c5, c6);
-        }
-    }
-
-    pub fn query7<F, C1, C2, C3, C4, C5, C6, C7>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-            self.registry.bit_for::<C5>(),
-            self.registry.bit_for::<C6>(),
-            self.registry.bit_for::<C7>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4, c5, c6, c7)) = self.get_component_stores_for_entity7::<C1, C2, C3, C4, C5, C6, C7>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4, c5, c6, c7);
-            }
-        }
-    }
-
-    pub fn query_by_id7<F, C1, C2, C3, C4, C5, C6, C7>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7)
-    {
-        if let Some((c1, c2, c3, c4, c5, c6, c7)) = self.get_component_stores_for_entity7::<C1, C2, C3, C4, C5, C6, C7>(id) {
-            f(c1, c2, c3, c4, c5, c6, c7);
-        }
-    }
-
-    pub fn query8<F, C1, C2, C3, C4, C5, C6, C7, C8>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, C8: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7, &mut C8)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-            self.registry.bit_for::<C5>(),
-            self.registry.bit_for::<C6>(),
-            self.registry.bit_for::<C7>(),
-            self.registry.bit_for::<C8>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4, c5, c6, c7, c8)) = self.get_component_stores_for_entity8::<C1, C2, C3, C4, C5, C6, C7, C8>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4, c5, c6, c7, c8);
-            }
-        }
-    }
-
-    pub fn query_by_id8<F, C1, C2, C3, C4, C5, C6, C7, C8>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, C8: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7, &mut C8)
-    {
-        if let Some((c1, c2, c3, c4, c5, c6, c7, c8)) = self.get_component_stores_for_entity8::<C1, C2, C3, C4, C5, C6, C7, C8>(id) {
-            f(c1, c2, c3, c4, c5, c6, c7, c8);
-        }
-    }
-
-    pub fn query9<F, C1, C2, C3, C4, C5, C6, C7, C8, C9>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, C8: Component, C9: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7, &mut C8, &mut C9)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-            self.registry.bit_for::<C5>(),
-            self.registry.bit_for::<C6>(),
-            self.registry.bit_for::<C7>(),
-            self.registry.bit_for::<C8>(),
-            self.registry.bit_for::<C9>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4, c5, c6, c7, c8, c9)) = self.get_component_stores_for_entity9::<C1, C2, C3, C4, C5, C6, C7, C8, C9>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4, c5, c6, c7, c8, c9);
-            }
-        }
-    }
-
-    pub fn query_by_id9<F, C1, C2, C3, C4, C5, C6, C7, C8, C9>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, C8: Component, C9: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7, &mut C8, &mut C9)
-    {
-        if let Some((c1, c2, c3, c4, c5, c6, c7, c8, c9)) = self.get_component_stores_for_entity9::<C1, C2, C3, C4, C5, C6, C7, C8, C9>(id) {
-            f(c1, c2, c3, c4, c5, c6, c7, c8, c9);
-        }
-    }
-
-    pub fn query10<F, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10>(&mut self, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, C8: Component, C9: Component, C10: Component, F: FnMut(&EntityId, &mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7, &mut C8, &mut C9, &mut C10)
-    {
-        let bits = [
-            self.registry.bit_for::<C1>(),
-            self.registry.bit_for::<C2>(),
-            self.registry.bit_for::<C3>(),
-            self.registry.bit_for::<C4>(),
-            self.registry.bit_for::<C5>(),
-            self.registry.bit_for::<C6>(),
-            self.registry.bit_for::<C7>(),
-            self.registry.bit_for::<C8>(),
-            self.registry.bit_for::<C9>(),
-            self.registry.bit_for::<C10>(),
-        ];
-        let mask = bits.iter().fold(0u64, |acc, &bit| acc | (1u64 << bit));
-
-        let entities: Vec<EntityId> = self.meta
-            .iter()
-            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for entity_id in entities {
-            if let Some((c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)) = self.get_component_stores_for_entity10::<C1, C2, C3, C4, C5, C6, C7, C8, C9, C10>(&entity_id) {
-                f(&entity_id, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10);
-            }
-        }
-    }
-
-    pub fn query_by_id10<F, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10>(&mut self, id: &EntityId, mut f: F)
-        where C1: Component, C2: Component, C3: Component, C4: Component, C5: Component, C6: Component, C7: Component, C8: Component, C9: Component, C10: Component, F: FnMut(&mut C1, &mut C2, &mut C3, &mut C4, &mut C5, &mut C6, &mut C7, &mut C8, &mut C9, &mut C10)
-    {
-        if let Some((c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)) = self.get_component_stores_for_entity10::<C1, C2, C3, C4, C5, C6, C7, C8, C9, C10>(id) {
-            f(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10);
         }
     }
 }
@@ -934,70 +346,49 @@ impl World {
 
 #[macro_export]
 macro_rules! query {
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty, $c10:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident, $a10:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(|$id, $a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(|$id, $a1, $a2, $a3, $a4, $a5, $a6| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query5::<_, $c1, $c2, $c3, $c4, $c5>(|$id, $a1, $a2, $a3, $a4, $a5| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query4::<_, $c1, $c2, $c3, $c4>(|$id, $a1, $a2, $a3, $a4| $body)
-    };
-    (($c1:ty, $c2:ty, $c3:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query3::<_, $c1, $c2, $c3>(|$id, $a1, $a2, $a3| $body)
-    };
-    (($c1:ty, $c2:ty), | $id:ident, $a1:ident, $a2:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
-    };
+    // Single component
     (($c1:ty), | $id:ident, $a1:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query1::<_, $c1>(|$id, $a1| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query::<&mut $c1, _>(|$id, $a1| $body)
+    };
+    // Two components
+    (($c1:ty, $c2:ty), | $id:ident, $a1:ident, $a2:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query::<(&mut $c1, &mut $c2), _>(|$id, ($a1, $a2)| $body)
+    };
+    // Three components
+    (($c1:ty, $c2:ty, $c3:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query::<(&mut $c1, (&mut $c2, &mut $c3)), _>(|$id, ($a1, ($a2, $a3))| $body)
+    };
+    // Four components
+    (($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query::<(&mut $c1, (&mut $c2, (&mut $c3, &mut $c4))), _>(|$id, ($a1, ($a2, ($a3, $a4)))| $body)
+    };
+    // Five components
+    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $id:ident, $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query::<(&mut $c1, (&mut $c2, (&mut $c3, (&mut $c4, &mut $c5)))), _>(|$id, ($a1, ($a2, ($a3, ($a4, $a5))))| $body)
     };
 }
 
-
 #[macro_export]
 macro_rules! query_by_id {
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty, $c10:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident, $a10:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id10::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9, $a10| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty, $c9:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident, $a9:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id9::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8, $a9| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty, $c8:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident, $a8:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id8::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7, $a8| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty, $c7:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id7::<_, $c1, $c2, $c3, $c4, $c5, $c6, $c7>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6, $a7| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty, $c6:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id6::<_, $c1, $c2, $c3, $c4, $c5, $c6>(&$eid, |$a1, $a2, $a3, $a4, $a5, $a6| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id5::<_, $c1, $c2, $c3, $c4, $c5>(&$eid, |$a1, $a2, $a3, $a4, $a5| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id4::<_, $c1, $c2, $c3, $c4>(&$eid, |$a1, $a2, $a3, $a4| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty), | $a1:ident, $a2:ident, $a3:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id3::<_, $c1, $c2, $c3>(&$eid, |$a1, $a2, $a3| $body)
-    };
-    ($eid:expr, ($c1:ty, $c2:ty), | $a1:ident, $a2:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
-    };
+    // Single component
     ($eid:expr, ($c1:ty), | $a1:ident | $body:block) => {
-        crate::index::engine::systems::entityComponentSystem::world().query_by_id1::<_, $c1>(&$eid, |$a1| $body)
+        crate::index::engine::systems::entityComponentSystem::world().query_one::<&mut $c1, _>(&$eid, |$a1| $body)
+    };
+    // Two components
+    ($eid:expr, ($c1:ty, $c2:ty), | $a1:ident, $a2:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query_one::<(&mut $c1, &mut $c2), _>(&$eid, |($a1, $a2)| $body)
+    };
+    // Three components
+    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty), | $a1:ident, $a2:ident, $a3:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query_one::<(&mut $c1, (&mut $c2, &mut $c3)), _>(&$eid, |($a1, ($a2, $a3))| $body)
+    };
+    // Four components
+    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query_one::<(&mut $c1, (&mut $c2, (&mut $c3, &mut $c4))), _>(&$eid, |($a1, ($a2, ($a3, $a4)))| $body)
+    };
+    // Five components
+    ($eid:expr, ($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty), | $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident | $body:block) => {
+        crate::index::engine::systems::entityComponentSystem::world().query_one::<(&mut $c1, (&mut $c2, (&mut $c3, (&mut $c4, &mut $c5)))), _>(&$eid, |($a1, ($a2, ($a3, ($a4, $a5))))| $body)
     };
 }
 
