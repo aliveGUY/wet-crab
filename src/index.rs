@@ -26,19 +26,26 @@ impl Program {
         insert_many!(
             chair_entity_id,
             get_static_object_copy(Assets::Chair),
-            engine::components::SharedComponents::Transform::with_translation(2.0, -3.0, -5.0)
+            Transform::with_translation(2.0, -3.0, -5.0),
+            Metadata::new("Chair")
         );
 
         let doll_entity_id = spawn();
         insert_many!(
             doll_entity_id,
             get_animated_object_copy(Assets::TestingDoll),
-            engine::components::SharedComponents::Transform::with_translation(-2.0, -3.0, -5.0)
+            Transform::with_translation(-2.0, -3.0, -5.0),
+            Metadata::new("Doll")
+
         );
 
         let player_entity_id = spawn();
         *PLAYER_ENTITY_ID.write().unwrap() = Some(player_entity_id.clone());
-        insert_many!(player_entity_id, engine::components::CameraComponent::new());
+        insert_many!(
+            player_entity_id,
+            CameraComponent::new(),
+            Metadata::new("Player")
+        );
 
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));

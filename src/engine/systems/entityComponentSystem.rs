@@ -205,6 +205,20 @@ pub trait QueryParam {
     fn fetch_components<'w>(world: &'w mut World, entity: &EntityId) -> Option<Self::Output<'w>>;
 }
 
+/// Trait for read-only query parameters (immutable component access).
+/// This enables variadic read-only queries without borrowing conflicts.
+pub trait QueryParamRead {
+    /// Output tuple of component references for this query parameter.
+    type Output<'w>;
+    
+    /// Compute the combined bitmask for all component types in the query, if they are registered.
+    /// Returns None if any component type is not registered (no entities could match).
+    fn mask_bits_read(registry: &ComponentRegistry) -> Option<u64>;
+    
+    /// Fetch the components for a given entity (returns None if any component is missing).
+    fn fetch_components_read<'w>(world: &'w World, entity: &EntityId) -> Option<Self::Output<'w>>;
+}
+
 // Implementation for single mutable component references
 impl<T: Component> QueryParam for &mut T {
     type Output<'w> = &'w mut T;
@@ -266,6 +280,53 @@ impl<Q1: QueryParam, Q2: QueryParam> QueryParam for (Q1, Q2) {
             let comp2 = Q2::fetch_components(&mut *world_ptr, entity)?;
             Some((comp1, comp2))
         }
+    }
+}
+
+// —————————————————————————————————————————— QueryParamRead implementations ————————
+
+// Implementation for single immutable component references (read-only)
+impl<T: Component> QueryParamRead for &T {
+    type Output<'w> = &'w T;
+    
+    fn mask_bits_read(registry: &ComponentRegistry) -> Option<u64> {
+        // If the component type is registered, return its bit mask
+        let type_id = TypeId::of::<T>();
+        registry.bits.get(&type_id).map(|&bit| 1u64 << bit)
+    }
+    
+    fn fetch_components_read<'w>(world: &'w World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        world.get_component_readonly::<T>(entity)
+    }
+}
+
+// Implementation for single-element tuples (read-only)
+impl<Q: QueryParamRead> QueryParamRead for (Q,) {
+    type Output<'w> = (Q::Output<'w>,);
+    
+    fn mask_bits_read(registry: &ComponentRegistry) -> Option<u64> {
+        Q::mask_bits_read(registry)
+    }
+    
+    fn fetch_components_read<'w>(world: &'w World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        Some((Q::fetch_components_read(world, entity)?,))
+    }
+}
+
+// Recursive implementation for tuples (read-only) - enables arbitrary-length queries
+impl<Q1: QueryParamRead, Q2: QueryParamRead> QueryParamRead for (Q1, Q2) {
+    type Output<'w> = (Q1::Output<'w>, Q2::Output<'w>);
+    
+    fn mask_bits_read(registry: &ComponentRegistry) -> Option<u64> {
+        let m1 = Q1::mask_bits_read(registry)?;
+        let m2 = Q2::mask_bits_read(registry)?;
+        Some(m1 | m2)
+    }
+    
+    fn fetch_components_read<'w>(world: &'w World, entity: &EntityId) -> Option<Self::Output<'w>> {
+        let c1 = Q1::fetch_components_read(world, entity)?;
+        let c2 = Q2::fetch_components_read(world, entity)?;
+        Some((c1, c2))
     }
 }
 
@@ -340,6 +401,36 @@ impl World {
             }
         }
     }
+
+    /// Generic read-only query: returns a Vec of (EntityId, C1, C2, ...) tuples.
+    /// This method supports arbitrary numbers of components using the QueryParamRead trait.
+    pub fn query_all<Q>(&self) -> Vec<(EntityId, Q::Output<'_>)>
+    where
+        Q: QueryParamRead,
+    {
+        let registry = &self.registry;
+        
+        // Compute combined mask (return empty vec if any type is unregistered)
+        let mask = match Q::mask_bits_read(registry) {
+            Some(m) => m,
+            None => return Vec::new(),
+        };
+        
+        // Find all entities that have all components in the mask
+        let entities: Vec<_> = self.meta.iter()
+            .filter(|(_, &entity_mask)| (entity_mask & mask) == mask)
+            .map(|(id, _)| id.clone())
+            .collect();
+        
+        // Fetch components for each entity
+        let mut results = Vec::new();
+        for id in entities {
+            if let Some(comps) = Q::fetch_components_read(self, &id) {
+                results.push((id, comps));
+            }
+        }
+        results
+    }
 }
 
 // convenience front‑end macros --------------------------------------------
@@ -392,6 +483,7 @@ macro_rules! query_by_id {
     };
 }
 
+
 // New get_query_by_id! macro - returns read-only components instead of using callback
 #[macro_export]
 macro_rules! get_query_by_id {
@@ -399,6 +491,46 @@ macro_rules! get_query_by_id {
         {
             let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
             world.get_component_readonly::<$c1>(&$eid).cloned()
+        }
+    };
+}
+
+// New query_get_all! macro - returns Vec of all entities with their components (readonly, flattened)
+#[macro_export]
+macro_rules! query_get_all {
+    // Single component
+    (($c1:ty)) => {
+        {
+            let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
+            world.query_all::<(&$c1,)>()
+        }
+    };
+    // Two components
+    (($c1:ty, $c2:ty)) => {
+        {
+            let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
+            world.query_all::<(&$c1, &$c2)>()
+        }
+    };
+    // Three components
+    (($c1:ty, $c2:ty, $c3:ty)) => {
+        {
+            let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
+            world.query_all::<(&$c1, (&$c2, &$c3))>()
+        }
+    };
+    // Four components
+    (($c1:ty, $c2:ty, $c3:ty, $c4:ty)) => {
+        {
+            let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
+            world.query_all::<(&$c1, (&$c2, (&$c3, &$c4)))>()
+        }
+    };
+    // Five components
+    (($c1:ty, $c2:ty, $c3:ty, $c4:ty, $c5:ty)) => {
+        {
+            let world = crate::index::engine::systems::entityComponentSystem::WORLD.read().expect("world lock");
+            world.query_all::<(&$c1, (&$c2, (&$c3, (&$c4, &$c5))))>()
         }
     };
 }
