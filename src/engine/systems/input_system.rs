@@ -31,12 +31,14 @@ impl InputSystem {
         INPUT_SYSTEM.get().expect("InputSystem not initialized")
     }
 
+    #[allow(dead_code)]
     pub fn receive_mouse_event(&self, raw_event: &dyn Any) {
         if let Some(event) = self.handler.receive_mouse_event(raw_event) {
             EventSystem::notify(event);
         }
     }
 
+    #[allow(dead_code)]
     pub fn receive_key_event(&self, raw_event: &dyn Any) {
         if let Some(event) = self.handler.receive_key_event(raw_event) {
             EventSystem::notify(event);
@@ -366,12 +368,12 @@ impl InputHandler for BrowserInputHandler {
         None
     }
 
-    fn receive_mouse_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event> {
+    fn receive_mouse_event_owned(&self, _raw_event: Box<dyn Any>) -> Option<Event> {
         // For browser, just delegate to the reference version for now
         None
     }
 
-    fn receive_key_event_owned(&self, raw_event: Box<dyn Any>) -> Option<Event> {
+    fn receive_key_event_owned(&self, _raw_event: Box<dyn Any>) -> Option<Event> {
         // For browser, just delegate to the reference version for now
         None
     }

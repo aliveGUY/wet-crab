@@ -163,6 +163,7 @@ impl World {
     }
 
     // Query methods for 1-5 components
+    #[allow(dead_code)]
     pub fn query1<F, C1: Component>(&mut self, mut f: F)
     where F: FnMut(&EntityId, &mut C1)
     {
@@ -212,6 +213,7 @@ impl World {
         }
     }
 
+    #[allow(dead_code)]
     pub fn query_by_id2<F, C1: Component, C2: Component>(&mut self, entity: &EntityId, mut f: F)
     where F: FnMut(&mut C1, &mut C2)
     {

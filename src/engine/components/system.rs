@@ -1,11 +1,12 @@
 // Import Event type from parent scope
 use crate::index::engine::systems::event_system::Event;
 
-pub trait System: Send + Sync {
+pub trait SystemTrait: Send + Sync {
     fn event(&self, _event: &Event) {
         // Default implementation - do nothing
     }
 
+    #[allow(dead_code)]
     fn update() where Self: Sized {
         // Default static implementation - do nothing
         // This method can now be called statically: MySystem::update()
