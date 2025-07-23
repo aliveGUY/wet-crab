@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 #[path = "engine/mod.rs"]
 #[macro_use]
 pub mod engine;
-#[path = "game/mod.rs"] 
+#[path = "game/mod.rs"]
 pub mod game;
 
 use engine::*;
@@ -43,19 +43,17 @@ impl Program {
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
-        // Enhanced OpenGL setup for proper 3D rendering
+        InterfaceSystem::set_selected_element(1);
+
         unsafe {
-            // Enable depth testing with proper configuration
             gl.enable(glow::DEPTH_TEST);
             gl.depth_func(glow::LESS);
             gl.depth_mask(true);
-            
-            // Enable face culling to improve performance and avoid back-face artifacts
+
             gl.enable(glow::CULL_FACE);
             gl.cull_face(glow::BACK);
             gl.front_face(glow::CCW);
-            
-            // Verify depth buffer is available
+
             let depth_bits = gl.get_parameter_i32(glow::DEPTH_BITS);
             if depth_bits == 0 {
                 eprintln!("[WARNING] No depth buffer detected in Program::new()");
@@ -70,18 +68,12 @@ impl Program {
         Ok(Self { gl })
     }
 
-    pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) -> Result<(), String> {
+    pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) {
         RenderSystem::update(&self.gl, width, height);
-        Ok(())
-    }
-    
-    /// Get reference to the OpenGL context for state management
-    pub fn get_gl_context(&self) -> &glow::Context {
-        &self.gl
+        InterfaceSystem::update();
     }
 
-    #[allow(dead_code)]
-    pub fn cleanup(&self) {
-        println!("Program cleanup completed");
+    pub fn get_gl_context(&self) -> &glow::Context {
+        &self.gl
     }
 }
