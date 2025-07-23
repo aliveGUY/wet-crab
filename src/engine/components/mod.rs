@@ -14,10 +14,8 @@ pub mod metadata;
 // Re-export commonly used types for convenience
 pub use camera::Camera as CameraComponent;
 pub use system::SystemTrait;
-#[allow(dead_code)]
-pub type Transform = self::transform::Transform;
-#[allow(dead_code)]
-pub type Metadata = self::metadata::Metadata;
+pub use transform::Transform;
+pub use metadata::Metadata;
 #[allow(dead_code)]
 pub type Material = self::material::Material;
 #[allow(dead_code)]

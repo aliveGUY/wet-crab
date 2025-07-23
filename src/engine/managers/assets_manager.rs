@@ -138,7 +138,7 @@ impl AssetsManager {
         );
 
         // Create static object with default transform
-        let mut transform = Transform::new();
+        let mut transform = Transform::new(0.0, 0.0, 0.0);
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let static_object = StaticObject3DComponent::new(mesh, material);
@@ -180,7 +180,7 @@ impl AssetsManager {
         let animation_channels = extract_animation_channels(&gltf, &buffers, &asset_name_str);
 
         // Create animated object with default transform
-        let mut transform = Transform::new();
+        let mut transform = Transform::new(0.0, 0.0, 0.0);
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let animated_object = AnimatedObject3DComponent::new(
