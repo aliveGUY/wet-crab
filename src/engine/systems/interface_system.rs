@@ -1,8 +1,8 @@
 use once_cell::sync::OnceCell;
-use slint::{ ComponentHandle, Weak };
+use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
 use crate::{ InterfaceState, LevelEditorUI };
 use crate::query_get_all;
-use crate::index::components::Metadata;
+use crate::index::engine::components::Metadata;
 
 static UI_HANDLE: OnceCell<Weak<LevelEditorUI>> = OnceCell::new();
 
@@ -18,20 +18,39 @@ impl InterfaceSystem {
     pub fn update() {}
 
     pub fn update_entity_tree() {
-        let all_entities_with_metadata = query_get_all!(Metadata);
-        // Process the entities with metadata
-        for (entity_id, metadata) in all_entities_with_metadata {
-            println!("Entity: {} has metadata: {:?}", entity_id, metadata);
-        }
-    }
-
-    pub fn set_selected_element(index: i32) {
         let ui = UI_HANDLE.get()
             .expect("UI_HANDLE not initialized")
             .upgrade()
             .expect("UI instance already dropped");
 
         let state = ui.global::<InterfaceState>();
-        state.set_selected_index(index);
+        
+        let all_entities_with_metadata = query_get_all!(Metadata);
+        
+        let entities_model: VecModel<(SharedString, SharedString)> = VecModel::default();
+        
+        for (entity_id, metadata) in all_entities_with_metadata {
+            let entity_data = (
+                SharedString::from(entity_id),
+                SharedString::from(metadata.title()),
+            );
+            entities_model.push(entity_data);
+        }
+        
+        let entity_count = entities_model.row_count();
+        
+        state.set_entities(ModelRc::new(entities_model).into());
+        
+        println!("Updated entity tree with {} entities", entity_count);
+    }
+
+    pub fn set_selected_element(entity_id: &str) {
+        let ui = UI_HANDLE.get()
+            .expect("UI_HANDLE not initialized")
+            .upgrade()
+            .expect("UI instance already dropped");
+
+        let state = ui.global::<InterfaceState>();
+        state.set_selected_index(SharedString::from(entity_id));
     }
 }

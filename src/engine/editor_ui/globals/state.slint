@@ -1,5 +1,6 @@
 export global InterfaceState {
-    in-out property <int> selected-index: -1;
+    in-out property <string> selected-index: "";
     in-out property <string> selected-title: "";
     in-out property <string> selected-components;
+    in-out property <[{entity_id: string, title: string}]> entities: [];
 }

@@ -9,4 +9,8 @@ impl Metadata {
             title: title.to_string(),
         }
     }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
 }

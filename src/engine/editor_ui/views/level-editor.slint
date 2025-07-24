@@ -19,13 +19,13 @@ export component LevelEditorUI inherits Window {
             height: 100%;
             width: 300px;
 
-            for i in 40: EntityListItem {
-                title: "Item " + (i + 1);
-                index: i;
+            for entity in InterfaceState.entities: EntityListItem {
+                title: entity.title;
+                entity-id: entity.entity_id;
             }
         }
 
-        if InterfaceState.selected-index != -1:Panel {
+        if InterfaceState.selected-index != "":Panel {
             height: 100%;
             width: 300px;
 
@@ -44,7 +44,7 @@ export component LevelEditorUI inherits Window {
                 }
 
                 clicked => {
-                    InterfaceState.selected-index = -1;
+                    InterfaceState.selected-index = "";
                 }
             }
 

@@ -46,7 +46,6 @@ impl Program {
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
-        InterfaceSystem::set_selected_element(1);
         InterfaceSystem::update_entity_tree();
 
         unsafe {

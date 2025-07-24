@@ -3,14 +3,14 @@ import { InterfaceState } from "../globals/state.slint";
 
 export component EntityListItem {
     in property <string> title;
-    in property <int> index;
+    in property <string> entity-id;
 
     TouchArea {
         width: 100%;
         mouse-cursor: pointer;
         Rectangle {
             border-radius: 6px;
-            background: InterfaceState.selected-index == index ? Colors.card-background-selected : Colors.card-background;
+            background: InterfaceState.selected-index == root.entity-id ? Colors.card-background-selected : Colors.card-background;
             border-width: 1px;
             border-color: parent.has-hover ? Colors.card-background-selected : Colors.card-background;
             VerticalLayout {
@@ -22,7 +22,7 @@ export component EntityListItem {
                 Text {
                     width: 100%;
                     text: root.title;
-                    color: InterfaceState.selected-index == index ? Colors.text-color-selected : Colors.text-color;
+                    color: InterfaceState.selected-index == root.entity-id ? Colors.text-color-selected : Colors.text-color;
                     font-size: 16px;
                     vertical-alignment: center;
                     horizontal-alignment: left;
@@ -31,7 +31,7 @@ export component EntityListItem {
         }
 
         clicked => {
-            InterfaceState.selected-index = index;
+            InterfaceState.selected-index = root.entity-id;
             InterfaceState.selected-title = root.title;
         }
     }
