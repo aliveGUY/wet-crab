@@ -57,16 +57,6 @@ pub fn mat4x4_rot_z(angle: f32) -> Mat4x4 {
     ]
 }
 
-// Create rotation matrix from Euler angles (pitch, yaw, roll)
-pub fn mat4x4_from_euler(pitch: f32, yaw: f32, roll: f32) -> Mat4x4 {
-    // Apply rotations in order: Y (yaw), X (pitch), Z (roll)
-    let rot_y = mat4x4_rot_y(yaw);
-    let rot_x = mat4x4_rot_x(pitch);
-    let rot_z = mat4x4_rot_z(roll);
-    
-    // Combine rotations: Z * X * Y
-    mat4x4_mul(rot_z, mat4x4_mul(rot_x, rot_y))
-}
 
 pub fn mat4x4_scale(x: f32, y: f32, z: f32) -> Mat4x4 {
     [

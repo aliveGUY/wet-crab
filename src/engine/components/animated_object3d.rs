@@ -1,15 +1,15 @@
 // Import shared components
-use crate::index::engine::components::SharedComponents::{Mesh, Material};
+use crate::index::engine::components::shared_components::{Mesh, Material};
 
 // Import animation-specific components
 mod skeleton_mod {
-    include!("Skeleton.rs");
+    include!("skeleton.rs");
 }
 mod animation_mod {
-    include!("AnimationState.rs");
+    include!("animation_state.rs");
 }
 mod animator_mod {
-    include!("Animator.rs");
+    include!("animator.rs");
 }
 
 pub use skeleton_mod::*;

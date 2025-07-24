@@ -3,9 +3,9 @@ use once_cell::sync::Lazy;
 use glow::HasContext;
 
 // Import required components - using the new module structure
-use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent};
-use crate::index::engine::components::SharedComponents::{Transform, Mesh, Material};
-use crate::index::engine::utils::GLTFLoaderUtils::*;
+use crate::index::engine::components::{ StaticObject3DComponent, AnimatedObject3DComponent };
+use crate::index::engine::components::SharedComponents::{ Transform };
+use crate::index::engine::utils::gltf_loader_utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Assets {
@@ -120,17 +120,25 @@ impl AssetsManager {
         println!("🔄 Loading static GLTF asset: {:?}", asset_name);
 
         // Parse asset data
-        let gltf = gltf::Gltf::from_slice(gltf_data.as_bytes())
+        let gltf = gltf::Gltf
+            ::from_slice(gltf_data.as_bytes())
             .unwrap_or_else(|e| panic!("Failed to parse GLTF for {:?}: {}", asset_name, e));
         let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
 
         // Extract components - all error handling is internal
         let asset_name_str = format!("{:?}", asset_name);
         let mesh = extract_mesh(gl, &gltf, &buffers, &asset_name_str);
-        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, &asset_name_str);
+        let material = extract_material(
+            gl,
+            &gltf,
+            &buffers,
+            png_data,
+            shader_program,
+            &asset_name_str
+        );
 
         // Create static object with default transform
-        let mut transform = Transform::new();
+        let mut transform = Transform::new(0.0, 0.0, 0.0);
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let static_object = StaticObject3DComponent::new(mesh, material);
@@ -152,43 +160,39 @@ impl AssetsManager {
         println!("🔄 Loading animated GLTF asset: {:?}", asset_name);
 
         // Parse asset data
-        let gltf = gltf::Gltf::from_slice(gltf_data.as_bytes())
+        let gltf = gltf::Gltf
+            ::from_slice(gltf_data.as_bytes())
             .unwrap_or_else(|e| panic!("Failed to parse GLTF for {:?}: {}", asset_name, e));
         let buffers = vec![gltf::buffer::Data(bin_data.to_vec())];
 
         // Extract components - all error handling is internal
         let asset_name_str = format!("{:?}", asset_name);
         let mesh = extract_mesh(gl, &gltf, &buffers, &asset_name_str);
-        let material = extract_material(gl, &gltf, &buffers, png_data, shader_program, &asset_name_str);
+        let material = extract_material(
+            gl,
+            &gltf,
+            &buffers,
+            png_data,
+            shader_program,
+            &asset_name_str
+        );
         let skeleton = extract_skeleton(&gltf, &buffers, &asset_name_str);
         let animation_channels = extract_animation_channels(&gltf, &buffers, &asset_name_str);
 
         // Create animated object with default transform
-        let mut transform = Transform::new();
+        let mut transform = Transform::new(0.0, 0.0, 0.0);
         transform.translate(0.0, 0.0, 0.0); // Default position
 
         let animated_object = AnimatedObject3DComponent::new(
-            mesh, 
-            material, 
-            skeleton, 
+            mesh,
+            material,
+            skeleton,
             animation_channels
         );
 
         // Store in animated assets map
         self.animated_assets.insert(asset_name, animated_object);
         println!("✅ Loaded and cached animated asset: {:?}", asset_name);
-    }
-}
-
-// Platform-specific shader version detection
-fn get_shader_version() -> &'static str {
-    #[cfg(target_arch = "wasm32")]
-    {
-        "#version 300 es\nprecision mediump float;"
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        "#version 330 core"
     }
 }
 
@@ -219,16 +223,20 @@ fn create_shader_program(
     program_name: &str
 ) -> glow::Program {
     unsafe {
-        // Handle version injection internally
-        let vs_src = vertex_shader_source.replace("#VERSION", get_shader_version());
-        let fs_src = fragment_shader_source.replace("#VERSION", get_shader_version());
+        // Use shader sources directly (no version replacement needed)
+        let vs = compile_shader(
+            gl,
+            glow::VERTEX_SHADER,
+            vertex_shader_source.to_string()
+        ).unwrap_or_else(|e| panic!("Failed to compile {} vertex shader: {}", program_name, e));
+        let fs = compile_shader(
+            gl,
+            glow::FRAGMENT_SHADER,
+            fragment_shader_source.to_string()
+        ).unwrap_or_else(|e| panic!("Failed to compile {} fragment shader: {}", program_name, e));
 
-        let vs = compile_shader(gl, glow::VERTEX_SHADER, vs_src)
-            .unwrap_or_else(|e| panic!("Failed to compile {} vertex shader: {}", program_name, e));
-        let fs = compile_shader(gl, glow::FRAGMENT_SHADER, fs_src)
-            .unwrap_or_else(|e| panic!("Failed to compile {} fragment shader: {}", program_name, e));
-
-        let program = gl.create_program()
+        let program = gl
+            .create_program()
             .unwrap_or_else(|e| panic!("Failed to create {} shader program: {}", program_name, e));
         gl.attach_shader(program, vs);
         gl.attach_shader(program, fs);
@@ -246,7 +254,6 @@ fn create_shader_program(
         program
     }
 }
-
 
 // Global singleton instance
 pub static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {

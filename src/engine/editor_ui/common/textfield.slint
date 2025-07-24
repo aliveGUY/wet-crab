@@ -1,0 +1,36 @@
+import { Colors } from "../globals/colors.slint";
+
+export component Textfield {
+    in property <string> label;
+    in property <string> value;
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 4px;
+        height: self.preferred-height;
+
+        Text {
+            font-size: 16px;
+            width: 100%;
+            text: root.label;
+        }
+
+        Rectangle {
+            background: Colors.input-background;
+            border-radius: 4px;
+            border-color: Colors.input-border;
+            border-width: 1px;
+
+            VerticalLayout {
+                padding: 4px;
+                height: self.preferred-height;
+
+                TextInput {
+                    text: root.value;
+                    vertical-alignment: center;
+                    font-size: 16px;
+                }
+            }
+        }
+    }
+}

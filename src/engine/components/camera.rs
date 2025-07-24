@@ -15,7 +15,7 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Self {
-            transform: RwLock::new(Transform::new()),
+            transform: RwLock::new(Transform::new(0.0, 0.0, 0.0)),
             position: RwLock::new([0.0, 0.0, 0.0]),
             pitch: RwLock::new(0.0),
             yaw: RwLock::new(0.0),
@@ -122,7 +122,7 @@ impl Camera {
             
             // Update transform with new matrix
             let mut transform = self.transform.write().unwrap();
-            *transform = Transform::new();
+            *transform = Transform::new(0.0, 0.0, 0.0);
             // Note: We're storing the view matrix directly in the transform
             // This is a bit of a hack, but maintains compatibility
             *transform.get_matrix_mut() = view_matrix;

@@ -6,9 +6,6 @@ use dashmap::DashMap;
 pub enum EventType {
     Move,
     RotateCamera,
-    KeyboardDown,
-    KeyboardUp,
-    MouseMove,
 }
 
 pub struct Event {
@@ -41,10 +38,6 @@ impl EventSystem {
         instance.subscribers.entry(event_type).or_insert_with(Vec::new).push(system);
     }
 
-    pub fn unsubscribe(event_type: EventType) {
-        let instance = Self::instance();
-        instance.subscribers.remove(&event_type);
-    }
 
     pub fn notify(event: Event) {
         let instance = Self::instance();

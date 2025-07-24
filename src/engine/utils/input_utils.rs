@@ -7,10 +7,10 @@ pub fn calculate_movement_direction(w: bool, a: bool, s: bool, d: bool) -> Strin
     match (forward, back, left, right) {
         (true, false, true, false) => "forward-left".to_string(),
         (true, false, false, true) => "forward-right".to_string(),
-        (false, true, true, false) => "back-left".to_string(),
-        (false, true, false, true) => "back-right".to_string(),
+        (false, true, true, false) => "backward-left".to_string(),
+        (false, true, false, true) => "backward-right".to_string(),
         (true, false, false, false) => "forward".to_string(),
-        (false, true, false, false) => "back".to_string(),
+        (false, true, false, false) => "backward".to_string(),
         (false, false, true, false) => "left".to_string(),
         (false, false, false, true) => "right".to_string(),
         _ => "idle".to_string(),
@@ -20,6 +20,7 @@ pub fn calculate_movement_direction(w: bool, a: bool, s: bool, d: bool) -> Strin
 pub fn mouse_delta_to_euler(delta_x: f64, delta_y: f64) -> [f32; 2] {
     let sensitivity = 0.002;
     let yaw_delta = (delta_x * sensitivity) as f32;
+    // Natural FPS camera feel: mouse up -> look up, mouse down -> look down
     let pitch_delta = (delta_y * sensitivity) as f32;
-    [pitch_delta, yaw_delta]
+    [pitch_delta, yaw_delta]  // return as [pitch_delta, yaw_delta]
 }

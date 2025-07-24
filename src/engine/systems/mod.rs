@@ -1,9 +1,11 @@
-pub mod eventSystem;
-pub mod inputSystem;
+pub mod event_system;
+pub mod input_system;
+pub mod interface_system;
 #[macro_use]
-pub mod entityComponentSystem;
+pub mod entity_component_system;
 
 // Re-export the main types for easy access
-pub use eventSystem::{ EventSystem, Event, EventType };
-pub use inputSystem::{ InputSystem, InputHandler, DesktopInputHandler, BrowserInputHandler };
-pub use entityComponentSystem::*;
+pub use event_system::{ EventSystem, EventType };
+pub use input_system::{ InputSystem, DesktopInputHandler };
+pub use interface_system::{ InterfaceSystem };
+pub use entity_component_system::*;

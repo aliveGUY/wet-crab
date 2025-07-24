@@ -1,0 +1,50 @@
+import { Colors } from "../globals/colors.slint";
+import { Textfield } from "../common/textfield.slint";
+
+export component ComponentListItem {
+    Rectangle {
+        border-radius: 6px;
+        background: Colors.card-background;
+
+        VerticalLayout {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            Text {
+                text: "Transform";
+                font-size: 16px;
+                width: 100%;
+                horizontal-alignment: center;
+            }
+
+            Textfield {
+                label: "X position";
+                value: "0.0";
+            }
+
+            Textfield {
+                label: "Y position";
+                value: "0.0";
+            }
+
+            Textfield {
+                label: "Z position";
+                value: "0.0";
+            }
+
+            Textfield {
+                label: "X rotation";
+                value: "0";
+            }
+
+            Textfield {
+                label: "Y rotation";
+                value: "0";
+            }
+
+            Textfield {
+                label: "Z rotation";
+                value: "0";
+            }
+        }
+    }
+}
