@@ -227,6 +227,60 @@ impl World {
             }
         }
     }
+
+    /// Get all entities that have a specific component type
+    pub fn query_get_all<T: Component>(&self) -> Vec<(EntityId, T)> 
+    where T: Clone
+    {
+        let type_id = TypeId::of::<T>();
+        
+        // Find the bit for this component type
+        let bit = match self.registry.bits.get(&type_id) {
+            Some(bit) => *bit,
+            None => return Vec::new(), // Component type not registered
+        };
+        
+        let mask = 1u64 << bit;
+        let mut results = Vec::new();
+
+        // Get all entities that have this component
+        for (entity_id, &entity_mask) in &self.meta {
+            if (entity_mask & mask) == mask {
+                if let Some(store) = self.stores.get(&type_id) {
+                    if let Some(store) = store.downcast_ref::<Store<T>>() {
+                        if let Some(component) = store.0.get(entity_id) {
+                            results.push((entity_id.clone(), component.clone()));
+                        }
+                    }
+                }
+            }
+        }
+
+        results
+    }
+
+    /// Get all entity IDs that have a specific component type
+    pub fn query_get_all_ids<T: Component>(&self) -> Vec<EntityId> {
+        let type_id = TypeId::of::<T>();
+        
+        // Find the bit for this component type
+        let bit = match self.registry.bits.get(&type_id) {
+            Some(bit) => *bit,
+            None => return Vec::new(), // Component type not registered
+        };
+        
+        let mask = 1u64 << bit;
+        let mut results = Vec::new();
+
+        // Get all entities that have this component
+        for (entity_id, &entity_mask) in &self.meta {
+            if (entity_mask & mask) == mask {
+                results.push(entity_id.clone());
+            }
+        }
+
+        results
+    }
 }
 
 // —————————————————————————————————————————— dynamic traits ————————
@@ -285,6 +339,28 @@ macro_rules! get_query_by_id {
         {
             let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
             world.get_component_readonly::<$c1>(&$eid).cloned()
+        }
+    };
+}
+
+// New query_get_all! macro - returns all entities with a specific component
+#[macro_export]
+macro_rules! query_get_all {
+    ($c1:ty) => {
+        {
+            let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
+            world.query_get_all::<$c1>()
+        }
+    };
+}
+
+// New query_get_all_ids! macro - returns all entity IDs with a specific component
+#[macro_export]
+macro_rules! query_get_all_ids {
+    ($c1:ty) => {
+        {
+            let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
+            world.query_get_all_ids::<$c1>()
         }
     };
 }

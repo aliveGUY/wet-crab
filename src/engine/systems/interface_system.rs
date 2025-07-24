@@ -1,6 +1,8 @@
 use once_cell::sync::OnceCell;
 use slint::{ ComponentHandle, Weak };
 use crate::{ InterfaceState, LevelEditorUI };
+use crate::query_get_all;
+use crate::index::components::Metadata;
 
 static UI_HANDLE: OnceCell<Weak<LevelEditorUI>> = OnceCell::new();
 
@@ -14,6 +16,14 @@ impl InterfaceSystem {
     }
 
     pub fn update() {}
+
+    pub fn update_entity_tree() {
+        let all_entities_with_metadata = query_get_all!(Metadata);
+        // Process the entities with metadata
+        for (entity_id, metadata) in all_entities_with_metadata {
+            println!("Entity: {} has metadata: {:?}", entity_id, metadata);
+        }
+    }
 
     pub fn set_selected_element(index: i32) {
         let ui = UI_HANDLE.get()

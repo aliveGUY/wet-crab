@@ -47,6 +47,7 @@ impl Program {
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
         InterfaceSystem::set_selected_element(1);
+        InterfaceSystem::update_entity_tree();
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
