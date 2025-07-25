@@ -1,21 +1,78 @@
 use once_cell::sync::OnceCell;
+use std::sync::Mutex;
 use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
-use crate::{ InterfaceState, LevelEditorUI };
-use crate::query_get_all;
+use crate::{ InterfaceState, LevelEditorUI, ComponentUI as SlintComponentUI, AttributeUI as SlintAttributeUI };
+use crate::{ query_get_all, get_all_components_by_id };
 use crate::index::engine::components::Metadata;
+use crate::index::engine::systems::entity_component_system::ComponentUI;
 
 static UI_HANDLE: OnceCell<Weak<LevelEditorUI>> = OnceCell::new();
+static SELECTED_ENTITY_ID: OnceCell<Mutex<SharedString>> = OnceCell::new();
 
-pub struct InterfaceSystem;
+pub struct InterfaceSystem {
+    test: SharedString,
+}
 
 impl InterfaceSystem {
+    // Convert from Rust ComponentUI to Slint ComponentUI
+    fn convert_to_slint_component_ui(rust_component: &ComponentUI) -> SlintComponentUI {
+        let slint_attributes: Vec<SlintAttributeUI> = rust_component.attributes
+            .iter()
+            .map(|attr| SlintAttributeUI {
+                name: attr.name.clone(),
+                value: attr.value.clone(),
+                dt_type: attr.dt_type.clone(),
+            })
+            .collect();
+
+        SlintComponentUI {
+            name: rust_component.name.clone(),
+            attributes: ModelRc::new(VecModel::from(slint_attributes)),
+        }
+    }
+
     pub fn initialize(ui_context: &LevelEditorUI) {
         UI_HANDLE.set(ui_context.as_weak()).unwrap_or_else(|_| {
             panic!("UI_HANDLE already set");
         });
+
+        let state = ui_context.global::<InterfaceState>();
+
+        SELECTED_ENTITY_ID.set(Mutex::new(SharedString::from(""))).ok();
+        state.on_selected_changed(|entity_id: SharedString| {
+            if let Some(mutex) = SELECTED_ENTITY_ID.get() {
+                *mutex.lock().unwrap() = entity_id.clone();
+            }
+        });
     }
 
-    pub fn update() {}
+    pub fn update() {
+        let selected_id = SELECTED_ENTITY_ID.get()
+            .map(|mutex| mutex.lock().unwrap().clone())
+            .unwrap_or_else(|| SharedString::from(""));
+
+        if selected_id == "" {
+            return;
+        }
+
+        let components_ui = get_all_components_by_id!(selected_id.to_string());
+
+        // Convert to Slint ComponentUI
+        let slint_components_ui: Vec<SlintComponentUI> = components_ui
+            .iter()
+            .map(|c| Self::convert_to_slint_component_ui(c))
+            .collect();
+
+        let ui = UI_HANDLE.get()
+            .expect("UI_HANDLE not initialized")
+            .upgrade()
+            .expect("UI instance already dropped");
+
+        let state = ui.global::<InterfaceState>();
+
+        let components_model = VecModel::from(slint_components_ui);
+        state.set_components(ModelRc::new(components_model).into());
+    }
 
     pub fn update_entity_tree() {
         let ui = UI_HANDLE.get()
@@ -24,23 +81,20 @@ impl InterfaceSystem {
             .expect("UI instance already dropped");
 
         let state = ui.global::<InterfaceState>();
-        
+
         let all_entities_with_metadata = query_get_all!(Metadata);
-        
+
         let entities_model: VecModel<(SharedString, SharedString)> = VecModel::default();
-        
+
         for (entity_id, metadata) in all_entities_with_metadata {
-            let entity_data = (
-                SharedString::from(entity_id),
-                SharedString::from(metadata.title()),
-            );
+            let entity_data = (SharedString::from(entity_id), SharedString::from(metadata.title()));
             entities_model.push(entity_data);
         }
-        
+
         let entity_count = entities_model.row_count();
-        
+
         state.set_entities(ModelRc::new(entities_model).into());
-        
+
         println!("Updated entity tree with {} entities", entity_count);
     }
 

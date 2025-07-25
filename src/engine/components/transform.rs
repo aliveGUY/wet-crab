@@ -1,4 +1,11 @@
-use crate::index::engine::utils::math::{ Mat4x4, mat4x4_translate, mat4x4_from_quat, mat4x4_mul };
+use crate::{
+    index::engine::{
+        utils::math::{ mat4x4_from_quat, mat4x4_mul, mat4x4_translate, Mat4x4 },
+        Component,
+        ComponentUI,
+        AttributeUI,
+    },
+};
 
 // Transform component for 3D objects - simplified matrix-based approach
 #[derive(Clone, Debug)]
@@ -38,5 +45,49 @@ impl Transform {
     /// Get mutable reference to the transformation matrix
     pub fn get_matrix_mut(&mut self) -> &mut Mat4x4 {
         &mut self.matrix
+    }
+}
+
+impl Component for Transform {
+    fn to_ui(&self) -> ComponentUI {
+        ComponentUI {
+            name: "Transform".into(),
+            attributes: vec![
+                AttributeUI {
+                    name: "x positions".into(),
+                    dt_type: "FLOAT".into(),
+                    value: "0.0".into(),
+                },
+                AttributeUI {
+                    name: "y positions".into(),
+                    dt_type: "FLOAT".into(),
+                    value: "0.0".into(),
+                },
+                AttributeUI {
+                    name: "z positions".into(),
+                    dt_type: "FLOAT".into(),
+                    value: "0.0".into(),
+                },
+                AttributeUI {
+                    name: "x rotation".into(),
+                    dt_type: "INT".into(),
+                    value: "0".into(),
+                },
+                AttributeUI {
+                    name: "x rotation".into(),
+                    dt_type: "INT".into(),
+                    value: "0".into(),
+                },
+                AttributeUI {
+                    name: "x rotation".into(),
+                    dt_type: "INT".into(),
+                    value: "0".into(),
+                }
+            ],
+        }
+    }
+
+    fn apply_ui(&mut self, component_ui: &ComponentUI) {
+        // TODO: Implement UI application logic
     }
 }

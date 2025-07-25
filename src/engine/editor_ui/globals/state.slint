@@ -1,6 +1,11 @@
+import { ComponentUI } from "../models/ComponentUI.slint";
+
 export global InterfaceState {
     in-out property <string> selected-index: "";
     in-out property <string> selected-title: "";
     in-out property <string> selected-components;
     in-out property <[{entity_id: string, title: string}]> entities: [];
+    in-out property <[ComponentUI]> components: [];
+
+    callback selected-changed(string);
 }

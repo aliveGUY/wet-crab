@@ -14,12 +14,27 @@
 // components – extend if you need more.
 
 use once_cell::sync::Lazy;
+use slint::SharedString;
 use std::{ any::{ Any, TypeId }, collections::HashMap, sync::{ RwLock, RwLockWriteGuard } };
 use uuid::Uuid;
 
-/// Marker trait for data that can live in the ECS.
-pub trait Component: Any + Send + Sync {}
-impl<T: Any + Send + Sync> Component for T {}
+#[derive(Clone)]
+pub struct AttributeUI {
+    pub name: SharedString,
+    pub value: SharedString,
+    pub dt_type: SharedString,
+}
+
+#[derive(Clone)]
+pub struct ComponentUI {
+    pub name: SharedString,
+    pub attributes: Vec<AttributeUI>,
+}
+
+pub trait Component: Any + Send + Sync {
+    fn to_ui(&self) -> ComponentUI;
+    fn apply_ui(&mut self, component_ui: &ComponentUI);
+}
 
 pub type EntityId = String;
 
@@ -45,7 +60,7 @@ pub struct ComponentRegistry {
     bits: HashMap<TypeId, u8>,
 }
 impl ComponentRegistry {
-    fn bit_for<T: Component>(&mut self) -> u8 {
+    fn bit_for<T: Component + Clone>(&mut self) -> u8 {
         *self.bits.entry(TypeId::of::<T>()).or_insert_with(|| {
             let b = self.next_bit;
             assert!(b < 64);
@@ -72,6 +87,7 @@ impl<T: Component> Store<T> {
 
 pub struct World {
     stores: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    component_stores: HashMap<TypeId, HashMap<EntityId, Box<dyn Component>>>,
     meta: HashMap<EntityId, ComponentMask>,
     registry: ComponentRegistry,
 }
@@ -79,6 +95,7 @@ impl Default for World {
     fn default() -> Self {
         Self {
             stores: HashMap::new(),
+            component_stores: HashMap::new(),
             meta: HashMap::new(),
             registry: ComponentRegistry::default(),
         }
@@ -94,15 +111,24 @@ impl World {
         id
     }
 
-    pub fn insert<T: Component>(&mut self, id: &EntityId, comp: T) {
+    pub fn insert<T: Component + Clone>(&mut self, id: &EntityId, comp: T) {
         let bit = self.registry.bit_for::<T>();
         let mask_bit = 1u64 << bit;
+        let type_id = TypeId::of::<T>();
+
+        // Insert into typed store
         let store = self.stores
-            .entry(TypeId::of::<T>())
+            .entry(type_id)
             .or_insert_with(|| Box::new(Store::<T>::default()))
             .downcast_mut::<Store<T>>()
             .unwrap();
-        store.insert(id, comp);
+        store.insert(id, comp.clone());
+
+        // Insert into component trait store
+        let component_store = self.component_stores.entry(type_id).or_insert_with(HashMap::new);
+        component_store.insert(id.clone(), Box::new(comp));
+
+        // Update entity mask
         self.meta
             .entry(id.clone())
             .and_modify(|m| {
@@ -118,7 +144,7 @@ impl World {
     }
 
     // Single component access for specific entity
-    fn get_component_for_entity<T: Component>(
+    fn get_component_for_entity<T: Component + Clone>(
         &mut self,
         entity_id: &EntityId
     ) -> Option<&mut T> {
@@ -139,23 +165,17 @@ impl World {
     }
 
     // Read-only single component access
-    pub fn get_component_readonly<T: Component>(
-        &self,
-        entity_id: &EntityId
-    ) -> Option<&T> {
+    pub fn get_component_readonly<T: Component>(&self, entity_id: &EntityId) -> Option<&T> {
         // We need to check if the component type is already registered
         let type_id = TypeId::of::<T>();
-        
+
         // Find the bit for this component type
         let bit = self.registry.bits.get(&type_id)?;
         let mask = 1u64 << bit;
 
         if let Some(&entity_mask) = self.meta.get(entity_id) {
             if (entity_mask & mask) == mask {
-                let store = self.stores
-                    .get(&type_id)?
-                    .downcast_ref::<Store<T>>()
-                    .unwrap();
+                let store = self.stores.get(&type_id)?.downcast_ref::<Store<T>>().unwrap();
                 return store.0.get(entity_id);
             }
         }
@@ -164,9 +184,7 @@ impl World {
 
     // Query methods for 1-5 components
     #[allow(dead_code)]
-    pub fn query1<F, C1: Component>(&mut self, mut f: F)
-    where F: FnMut(&EntityId, &mut C1)
-    {
+    pub fn query1<F, C1: Component + Clone>(&mut self, mut f: F) where F: FnMut(&EntityId, &mut C1) {
         let bit1 = self.registry.bit_for::<C1>();
         let mask = 1u64 << bit1;
         let entities: Vec<EntityId> = self.meta
@@ -181,8 +199,8 @@ impl World {
         }
     }
 
-    pub fn query2<F, C1: Component, C2: Component>(&mut self, mut f: F)
-    where F: FnMut(&EntityId, &mut C1, &mut C2)
+    pub fn query2<F, C1: Component + Clone, C2: Component + Clone>(&mut self, mut f: F)
+        where F: FnMut(&EntityId, &mut C1, &mut C2)
     {
         let bit1 = self.registry.bit_for::<C1>();
         let bit2 = self.registry.bit_for::<C2>();
@@ -195,18 +213,20 @@ impl World {
         for eid in entities {
             unsafe {
                 let world_ptr = self as *mut World;
-                if let (Some(c1), Some(c2)) = (
-                    (*world_ptr).get_component_for_entity::<C1>(&eid),
-                    (*world_ptr).get_component_for_entity::<C2>(&eid)
-                ) {
+                if
+                    let (Some(c1), Some(c2)) = (
+                        (*world_ptr).get_component_for_entity::<C1>(&eid),
+                        (*world_ptr).get_component_for_entity::<C2>(&eid),
+                    )
+                {
                     f(&eid, c1, c2);
                 }
             }
         }
     }
 
-    pub fn query_by_id1<F, C1: Component>(&mut self, entity: &EntityId, mut f: F)
-    where F: FnMut(&mut C1)
+    pub fn query_by_id1<F, C1: Component + Clone>(&mut self, entity: &EntityId, mut f: F)
+        where F: FnMut(&mut C1)
     {
         if let Some(c1) = self.get_component_for_entity::<C1>(entity) {
             f(c1);
@@ -214,32 +234,38 @@ impl World {
     }
 
     #[allow(dead_code)]
-    pub fn query_by_id2<F, C1: Component, C2: Component>(&mut self, entity: &EntityId, mut f: F)
-    where F: FnMut(&mut C1, &mut C2)
+    pub fn query_by_id2<F, C1: Component + Clone, C2: Component + Clone>(
+        &mut self,
+        entity: &EntityId,
+        mut f: F
+    )
+        where F: FnMut(&mut C1, &mut C2)
     {
         unsafe {
             let world_ptr = self as *mut World;
-            if let (Some(c1), Some(c2)) = (
-                (*world_ptr).get_component_for_entity::<C1>(entity),
-                (*world_ptr).get_component_for_entity::<C2>(entity)
-            ) {
+            if
+                let (Some(c1), Some(c2)) = (
+                    (*world_ptr).get_component_for_entity::<C1>(entity),
+                    (*world_ptr).get_component_for_entity::<C2>(entity),
+                )
+            {
                 f(c1, c2);
             }
         }
     }
 
     /// Get all entities that have a specific component type
-    pub fn query_get_all<T: Component>(&self) -> Vec<(EntityId, T)> 
-    where T: Clone
-    {
+    pub fn query_get_all<T: Component>(&self) -> Vec<(EntityId, T)> where T: Clone {
         let type_id = TypeId::of::<T>();
-        
+
         // Find the bit for this component type
         let bit = match self.registry.bits.get(&type_id) {
             Some(bit) => *bit,
-            None => return Vec::new(), // Component type not registered
+            None => {
+                return Vec::new();
+            } // Component type not registered
         };
-        
+
         let mask = 1u64 << bit;
         let mut results = Vec::new();
 
@@ -262,13 +288,15 @@ impl World {
     /// Get all entity IDs that have a specific component type
     pub fn query_get_all_ids<T: Component>(&self) -> Vec<EntityId> {
         let type_id = TypeId::of::<T>();
-        
+
         // Find the bit for this component type
         let bit = match self.registry.bits.get(&type_id) {
             Some(bit) => *bit,
-            None => return Vec::new(), // Component type not registered
+            None => {
+                return Vec::new();
+            } // Component type not registered
         };
-        
+
         let mask = 1u64 << bit;
         let mut results = Vec::new();
 
@@ -281,6 +309,34 @@ impl World {
 
         results
     }
+
+    /// Get all components for a specific entity as ComponentUI
+    pub fn get_all_components_ui_for_entity(&self, entity_id: &EntityId) -> Vec<ComponentUI> {
+        let mut components_ui = Vec::new();
+
+        let Some(&entity_mask) = self.meta.get(entity_id) else {
+            return components_ui;
+        };
+
+        for (&type_id, &bit) in &self.registry.bits {
+            let mask = 1u64 << bit;
+            if (entity_mask & mask) != mask {
+                continue;
+            }
+
+            let Some(store) = self.component_stores.get(&type_id) else {
+                continue;
+            };
+
+            let Some(component) = store.get(entity_id) else {
+                continue;
+            };
+
+            components_ui.push(component.to_ui());
+        }
+
+        components_ui
+    }
 }
 
 // —————————————————————————————————————————— dynamic traits ————————
@@ -288,7 +344,7 @@ impl World {
 pub trait Insertable {
     fn insert_into(self: Box<Self>, w: &mut World, id: &EntityId);
 }
-impl<T: Component> Insertable for T {
+impl<T: Component + Clone> Insertable for T {
     fn insert_into(self: Box<Self>, w: &mut World, id: &EntityId) {
         w.insert(id, *self)
     }
@@ -361,6 +417,16 @@ macro_rules! query_get_all_ids {
         {
             let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
             world.query_get_all_ids::<$c1>()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! get_all_components_by_id {
+    ($eid:expr) => {
+        {
+        let world = crate::index::engine::systems::entity_component_system::WORLD.read().unwrap();
+        world.get_all_components_ui_for_entity(&$eid)
         }
     };
 }

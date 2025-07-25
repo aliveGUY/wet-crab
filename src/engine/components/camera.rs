@@ -1,5 +1,6 @@
-use crate::index::engine::utils::math::{Mat4x4, build_view_matrix};
+use crate::index::engine::utils::math::{ Mat4x4, build_view_matrix };
 use crate::index::engine::components::SharedComponents::Transform;
+use crate::index::engine::{ Component, ComponentUI, AttributeUI };
 use std::sync::RwLock;
 
 #[derive(Debug)]
@@ -43,18 +44,18 @@ impl Camera {
     pub fn add_rotation_delta(&self, pitch_delta: f32, yaw_delta: f32) {
         *self.yaw.write().unwrap() += yaw_delta;
         *self.pitch.write().unwrap() += pitch_delta;
-        
+
         // Clamp pitch to prevent gimbal lock
         let mut pitch = self.pitch.write().unwrap();
         *pitch = pitch.clamp(-1.5, 1.5);
-        
+
         *self.transform_dirty.write().unwrap() = true;
     }
 
     /// Move camera relative to its current orientation
     pub fn move_relative(&self, forward: f32, right: f32, up: f32) {
         let (f, r, u) = self.basis_from_yaw();
-        
+
         // Update position using RwLock
         {
             let mut position = self.position.write().unwrap();
@@ -62,7 +63,7 @@ impl Camera {
             position[1] += forward * f[1] + right * r[1] + up * u[1];
             position[2] += forward * f[2] + right * r[2] + up * u[2];
         }
-        
+
         *self.transform_dirty.write().unwrap() = true;
     }
 
@@ -119,14 +120,14 @@ impl Camera {
             let pitch = *self.pitch.read().unwrap();
             let yaw = *self.yaw.read().unwrap();
             let view_matrix = build_view_matrix(position, pitch, yaw);
-            
+
             // Update transform with new matrix
             let mut transform = self.transform.write().unwrap();
             *transform = Transform::new(0.0, 0.0, 0.0);
             // Note: We're storing the view matrix directly in the transform
             // This is a bit of a hack, but maintains compatibility
             *transform.get_matrix_mut() = view_matrix;
-            
+
             *self.transform_dirty.write().unwrap() = false;
         }
     }
@@ -160,5 +161,49 @@ impl Clone for Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Component for Camera {
+    fn to_ui(&self) -> ComponentUI {
+        ComponentUI {
+            name: "Camera".into(),
+            attributes: vec![
+                AttributeUI {
+                    name: "x positions".into(),
+                    dt_type: "FLOAT".into(),
+                    value: "0.0".into(),
+                },
+                AttributeUI {
+                    name: "y positions".into(),
+                    dt_type: "FLOAT".into(),
+                    value: "0.0".into(),
+                },
+                AttributeUI {
+                    name: "z positions".into(),
+                    dt_type: "FLOAT".into(),
+                    value: "0.0".into(),
+                },
+                AttributeUI {
+                    name: "x rotation".into(),
+                    dt_type: "INT".into(),
+                    value: "0".into(),
+                },
+                AttributeUI {
+                    name: "x rotation".into(),
+                    dt_type: "INT".into(),
+                    value: "0".into(),
+                },
+                AttributeUI {
+                    name: "x rotation".into(),
+                    dt_type: "INT".into(),
+                    value: "0".into(),
+                }
+            ],
+        }
+    }
+
+    fn apply_ui(&mut self, component_ui: &ComponentUI) {
+        // TODO: Implement UI application logic
     }
 }
