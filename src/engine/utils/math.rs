@@ -181,3 +181,49 @@ pub fn node_world_txfm(nodes: &[crate::index::engine::components::AnimatedObject
 
     node_txfm
 }
+
+// Extract translation from a 4x4 transformation matrix
+pub fn mat4x4_extract_translation(matrix: &Mat4x4) -> [f32; 3] {
+    [matrix[3], matrix[7], matrix[11]]
+}
+
+// Extract scale from a 4x4 transformation matrix
+pub fn mat4x4_extract_scale(matrix: &Mat4x4) -> [f32; 3] {
+    let sx = (matrix[0] * matrix[0] + matrix[1] * matrix[1] + matrix[2] * matrix[2]).sqrt();
+    let sy = (matrix[4] * matrix[4] + matrix[5] * matrix[5] + matrix[6] * matrix[6]).sqrt();
+    let sz = (matrix[8] * matrix[8] + matrix[9] * matrix[9] + matrix[10] * matrix[10]).sqrt();
+    [sx, sy, sz]
+}
+
+// Extract Euler angles (in radians) from a 4x4 transformation matrix
+// Returns [pitch, yaw, roll] in radians
+pub fn mat4x4_extract_euler_angles(matrix: &Mat4x4) -> [f32; 3] {
+    // First extract scale to normalize the rotation part
+    let scale = mat4x4_extract_scale(matrix);
+    
+    // Normalize the rotation matrix by dividing by scale
+    let r00 = matrix[0] / scale[0];
+    let r01 = matrix[1] / scale[0];
+    let r02 = matrix[2] / scale[0];
+    let _r10 = matrix[4] / scale[1];
+    let r11 = matrix[5] / scale[1];
+    let _r12 = matrix[6] / scale[1];
+    let r20 = matrix[8] / scale[2];
+    let r21 = matrix[9] / scale[2];
+    let r22 = matrix[10] / scale[2];
+    
+    // Extract Euler angles (YXZ order)
+    let pitch = (-r21).asin().clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
+    let yaw = if pitch.cos().abs() > 0.0001 {
+        r20.atan2(r22)
+    } else {
+        r02.atan2(r00)
+    };
+    let roll = if pitch.cos().abs() > 0.0001 {
+        r01.atan2(r11)
+    } else {
+        0.0
+    };
+    
+    [pitch, yaw, roll]
+}

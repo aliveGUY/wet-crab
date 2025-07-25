@@ -1,17 +1,21 @@
 use once_cell::sync::OnceCell;
 use std::sync::Mutex;
 use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
-use crate::{ InterfaceState, LevelEditorUI, ComponentUI as SlintComponentUI, AttributeUI as SlintAttributeUI };
+use crate::{
+    InterfaceState,
+    LevelEditorUI,
+    ComponentUI as SlintComponentUI,
+    AttributeUI as SlintAttributeUI,
+};
 use crate::{ query_get_all, get_all_components_by_id };
 use crate::index::engine::components::Metadata;
 use crate::index::engine::systems::entity_component_system::ComponentUI;
 
 static UI_HANDLE: OnceCell<Weak<LevelEditorUI>> = OnceCell::new();
 static SELECTED_ENTITY_ID: OnceCell<Mutex<SharedString>> = OnceCell::new();
+static CACHED_COMPONENTS: OnceCell<Mutex<Vec<ComponentUI>>> = OnceCell::new();
 
-pub struct InterfaceSystem {
-    test: SharedString,
-}
+pub struct InterfaceSystem;
 
 impl InterfaceSystem {
     // Convert from Rust ComponentUI to Slint ComponentUI
@@ -39,9 +43,15 @@ impl InterfaceSystem {
         let state = ui_context.global::<InterfaceState>();
 
         SELECTED_ENTITY_ID.set(Mutex::new(SharedString::from(""))).ok();
+        CACHED_COMPONENTS.set(Mutex::new(Vec::new())).ok();
+
         state.on_selected_changed(|entity_id: SharedString| {
             if let Some(mutex) = SELECTED_ENTITY_ID.get() {
                 *mutex.lock().unwrap() = entity_id.clone();
+                // Clear cache when selection changes
+                if let Some(cache_mutex) = CACHED_COMPONENTS.get() {
+                    cache_mutex.lock().unwrap().clear();
+                }
             }
         });
     }
@@ -57,21 +67,68 @@ impl InterfaceSystem {
 
         let components_ui = get_all_components_by_id!(selected_id.to_string());
 
-        // Convert to Slint ComponentUI
-        let slint_components_ui: Vec<SlintComponentUI> = components_ui
+        // Check if data has actually changed
+        let has_changed = {
+            if let Some(cache_mutex) = CACHED_COMPONENTS.get() {
+                let cached = cache_mutex.lock().unwrap();
+                if cached.len() != components_ui.len() {
+                    true
+                } else {
+                    // Compare each component's data
+                    cached
+                        .iter()
+                        .zip(components_ui.iter())
+                        .any(|(cached_comp, new_comp)| {
+                            Self::component_data_changed(cached_comp, new_comp)
+                        })
+                }
+            } else {
+                true // No cache yet, so it's changed
+            }
+        };
+
+        // Only update UI if data has actually changed
+        if has_changed {
+            println!("[UI] Updating components for entity: {}", selected_id);
+            
+            // Update cache
+            if let Some(cache_mutex) = CACHED_COMPONENTS.get() {
+                *cache_mutex.lock().unwrap() = components_ui.clone();
+            }
+
+            // Convert to Slint ComponentUI
+            let slint_components_ui: Vec<SlintComponentUI> = components_ui
+                .iter()
+                .map(|c| Self::convert_to_slint_component_ui(c))
+                .collect();
+
+            let ui = UI_HANDLE.get()
+                .expect("UI_HANDLE not initialized")
+                .upgrade()
+                .expect("UI instance already dropped");
+
+            let state = ui.global::<InterfaceState>();
+
+            let components_model = VecModel::from(slint_components_ui);
+            state.set_components(ModelRc::new(components_model).into());
+        }
+    }
+
+    // Helper function to check if component data has changed
+    fn component_data_changed(cached: &ComponentUI, new: &ComponentUI) -> bool {
+        if cached.name != new.name || cached.attributes.len() != new.attributes.len() {
+            return true;
+        }
+
+        // Compare each attribute
+        cached.attributes
             .iter()
-            .map(|c| Self::convert_to_slint_component_ui(c))
-            .collect();
-
-        let ui = UI_HANDLE.get()
-            .expect("UI_HANDLE not initialized")
-            .upgrade()
-            .expect("UI instance already dropped");
-
-        let state = ui.global::<InterfaceState>();
-
-        let components_model = VecModel::from(slint_components_ui);
-        state.set_components(ModelRc::new(components_model).into());
+            .zip(new.attributes.iter())
+            .any(|(cached_attr, new_attr)| {
+                cached_attr.name != new_attr.name ||
+                    cached_attr.value != new_attr.value ||
+                    cached_attr.dt_type != new_attr.dt_type
+            })
     }
 
     pub fn update_entity_tree() {

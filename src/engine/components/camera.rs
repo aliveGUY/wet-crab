@@ -166,44 +166,97 @@ impl Default for Camera {
 
 impl Component for Camera {
     fn to_ui(&self) -> ComponentUI {
+        // Read actual values from the camera
+        let position = *self.position.read().unwrap();
+        let pitch = *self.pitch.read().unwrap();
+        let yaw = *self.yaw.read().unwrap();
+        let roll = *self.roll.read().unwrap();
+        
+        
+        // Convert radians to degrees for better UI display
+        let pitch_degrees = pitch.to_degrees();
+        let yaw_degrees = yaw.to_degrees();
+        let roll_degrees = roll.to_degrees();
+
         ComponentUI {
             name: "Camera".into(),
             attributes: vec![
                 AttributeUI {
-                    name: "x positions".into(),
+                    name: "x position".into(),
                     dt_type: "FLOAT".into(),
-                    value: "0.0".into(),
+                    value: format!("{:.3}", position[0]).into(),
                 },
                 AttributeUI {
-                    name: "y positions".into(),
+                    name: "y position".into(),
                     dt_type: "FLOAT".into(),
-                    value: "0.0".into(),
+                    value: format!("{:.3}", position[1]).into(),
                 },
                 AttributeUI {
-                    name: "z positions".into(),
+                    name: "z position".into(),
                     dt_type: "FLOAT".into(),
-                    value: "0.0".into(),
+                    value: format!("{:.3}", position[2]).into(),
                 },
                 AttributeUI {
-                    name: "x rotation".into(),
-                    dt_type: "INT".into(),
-                    value: "0".into(),
+                    name: "pitch (degrees)".into(),
+                    dt_type: "FLOAT".into(),
+                    value: format!("{:.1}", pitch_degrees).into(),
                 },
                 AttributeUI {
-                    name: "x rotation".into(),
-                    dt_type: "INT".into(),
-                    value: "0".into(),
+                    name: "yaw (degrees)".into(),
+                    dt_type: "FLOAT".into(),
+                    value: format!("{:.1}", yaw_degrees).into(),
                 },
                 AttributeUI {
-                    name: "x rotation".into(),
-                    dt_type: "INT".into(),
-                    value: "0".into(),
+                    name: "roll (degrees)".into(),
+                    dt_type: "FLOAT".into(),
+                    value: format!("{:.1}", roll_degrees).into(),
                 }
             ],
         }
     }
 
     fn apply_ui(&mut self, component_ui: &ComponentUI) {
-        // TODO: Implement UI application logic
+        // Apply UI changes back to the camera
+        for attribute in &component_ui.attributes {
+            match attribute.name.as_str() {
+                "x position" => {
+                    if let Ok(value) = attribute.value.parse::<f32>() {
+                        self.position.write().unwrap()[0] = value;
+                        *self.transform_dirty.write().unwrap() = true;
+                    }
+                },
+                "y position" => {
+                    if let Ok(value) = attribute.value.parse::<f32>() {
+                        self.position.write().unwrap()[1] = value;
+                        *self.transform_dirty.write().unwrap() = true;
+                    }
+                },
+                "z position" => {
+                    if let Ok(value) = attribute.value.parse::<f32>() {
+                        self.position.write().unwrap()[2] = value;
+                        *self.transform_dirty.write().unwrap() = true;
+                    }
+                },
+                "pitch (degrees)" => {
+                    if let Ok(degrees) = attribute.value.parse::<f32>() {
+                        *self.pitch.write().unwrap() = degrees.to_radians();
+                        *self.transform_dirty.write().unwrap() = true;
+                    }
+                },
+                "yaw (degrees)" => {
+                    if let Ok(degrees) = attribute.value.parse::<f32>() {
+                        *self.yaw.write().unwrap() = degrees.to_radians();
+                        *self.transform_dirty.write().unwrap() = true;
+                    }
+                },
+                "roll (degrees)" => {
+                    if let Ok(degrees) = attribute.value.parse::<f32>() {
+                        *self.roll.write().unwrap() = degrees.to_radians();
+                        *self.transform_dirty.write().unwrap() = true;
+                    }
+                },
+                _ => {}
+            }
+        }
     }
 }

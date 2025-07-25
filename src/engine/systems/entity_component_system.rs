@@ -164,6 +164,23 @@ impl World {
         None
     }
 
+    // Sync typed storage to trait object storage for a specific component
+    fn sync_component_to_trait_storage<T: Component + Clone>(&mut self, entity_id: &EntityId) {
+        let type_id = TypeId::of::<T>();
+        
+        // Get the updated component from typed storage
+        if let Some(typed_store) = self.stores.get(&type_id) {
+            if let Some(typed_store) = typed_store.downcast_ref::<Store<T>>() {
+                if let Some(component) = typed_store.0.get(entity_id) {
+                    // Update the trait object storage
+                    if let Some(trait_store) = self.component_stores.get_mut(&type_id) {
+                        trait_store.insert(entity_id.clone(), Box::new(component.clone()));
+                    }
+                }
+            }
+        }
+    }
+
     // Read-only single component access
     pub fn get_component_readonly<T: Component>(&self, entity_id: &EntityId) -> Option<&T> {
         // We need to check if the component type is already registered
@@ -230,6 +247,8 @@ impl World {
     {
         if let Some(c1) = self.get_component_for_entity::<C1>(entity) {
             f(c1);
+            // Sync the updated component to trait object storage
+            self.sync_component_to_trait_storage::<C1>(entity);
         }
     }
 
@@ -324,11 +343,20 @@ impl World {
                 continue;
             }
 
-            let Some(store) = self.component_stores.get(&type_id) else {
+            // Read from the typed storage instead of trait object storage
+            // This ensures we get the most up-to-date component data
+            let Some(typed_store) = self.stores.get(&type_id) else {
                 continue;
             };
 
-            let Some(component) = store.get(entity_id) else {
+            // We need to dynamically call to_ui() on the typed component
+            // Since we don't know the concrete type at compile time, we need to use the trait object storage
+            // But we should sync it first from the typed storage
+            let Some(trait_store) = self.component_stores.get(&type_id) else {
+                continue;
+            };
+
+            let Some(component) = trait_store.get(entity_id) else {
                 continue;
             };
 

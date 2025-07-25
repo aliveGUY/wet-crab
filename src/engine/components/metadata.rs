@@ -24,12 +24,17 @@ impl Component for Metadata {
             attributes: vec![AttributeUI {
                 name: "title".into(),
                 dt_type: "STRING".into(),
-                value: "Meta title".into(),
+                value: self.title.clone().into(),
             }],
         }
     }
 
     fn apply_ui(&mut self, component_ui: &ComponentUI) {
-        // TODO: Implement UI application logic
+        // Apply UI changes back to the component
+        for attribute in &component_ui.attributes {
+            if attribute.name.as_str() == "title" {
+                self.title = attribute.value.to_string();
+            }
+        }
     }
 }
