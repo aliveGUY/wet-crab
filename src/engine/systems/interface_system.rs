@@ -1,24 +1,36 @@
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
+use std::collections::HashMap;
+use std::any::TypeId;
 use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
 use crate::{ InterfaceState, LevelEditorUI, ComponentUI };
-use crate::{ query_get_all, get_all_components_by_id, query_by_id };
+use crate::{ query_get_all, get_all_components_by_id };
 use crate::index::engine::components::{ Metadata, Transform };
 use crate::index::engine::components::camera::Camera;
 use crate::index::engine::components::static_object3d::StaticObject3D;
 use crate::index::engine::components::animated_object3d::AnimatedObject3D;
-use crate::index::engine::Component;
+use crate::index::engine::systems::entity_component_system::WORLD;
 
 pub struct InterfaceSystem {
     ui_handle: Weak<LevelEditorUI>,
     selected_entity_id: Option<String>,
 }
 
-// Global instance for backward compatibility with existing code
+// Component type mapping for dynamic lookup
+static COMPONENT_TYPE_MAP: Lazy<HashMap<&'static str, TypeId>> = Lazy::new(|| {
+    let mut m = HashMap::new();
+    m.insert("Metadata", TypeId::of::<Metadata>());
+    m.insert("Transform", TypeId::of::<Transform>());
+    m.insert("Camera", TypeId::of::<Camera>());
+    m.insert("Static Object 3D", TypeId::of::<StaticObject3D>());
+    m.insert("Animated Object 3D", TypeId::of::<AnimatedObject3D>());
+    m
+});
+
 static INTERFACE_SYSTEM: Lazy<Mutex<Option<InterfaceSystem>>> = Lazy::new(|| Mutex::new(None));
 
 impl InterfaceSystem {
-    /// Handle component changes from UI - update ECS components immediately with complete ComponentUI
+    /// Handle component changes from UI - now uses dynamic lookup instead of hardcoded match!
     pub fn handle_component_change(
         entity_id: String,
         component_name: String,
@@ -31,37 +43,18 @@ impl InterfaceSystem {
             updated_component.attributes.row_count()
         );
 
-        // Apply the complete ComponentUI to the appropriate component type in ECS
-        // Use the same match for now, but this could be made dynamic with StoreDyn in the future
-        match component_name.as_str() {
-            "Metadata" => {
-                query_by_id!(entity_id, (Metadata), |metadata| {
-                    metadata.apply_ui(&updated_component);
-                });
-            }
-            "Transform" => {
-                query_by_id!(entity_id, (Transform), |transform| {
-                    transform.apply_ui(&updated_component);
-                });
-            }
-            "Camera" => {
-                query_by_id!(entity_id, (Camera), |camera| {
-                    camera.apply_ui(&updated_component);
-                });
-            }
-            "Static Object 3D" => {
-                query_by_id!(entity_id, (StaticObject3D), |static_obj| {
-                    static_obj.apply_ui(&updated_component);
-                });
-            }
-            "Animated Object 3D" => {
-                query_by_id!(entity_id, (AnimatedObject3D), |animated_obj| {
-                    animated_obj.apply_ui(&updated_component);
-                });
-            }
-            _ => {
-                println!("⚠️ Unknown component type: {}", component_name);
-            }
+        // Dynamic component lookup using TypeId and StoreDyn - no more hardcoded match!
+        if let Some(&type_id) = COMPONENT_TYPE_MAP.get(component_name.as_str()) {
+            WORLD.with(|w| {
+                let mut world = w.borrow_mut();
+                if world.apply_component_ui_by_type(&entity_id, &type_id, &updated_component) {
+                    println!("✅ Applied UI changes to {} component for entity {}", component_name, entity_id);
+                } else {
+                    println!("⚠️ No store found for component type: {}", component_name);
+                }
+            });
+        } else {
+            println!("⚠️ Unknown component type: {}", component_name);
         }
     }
 

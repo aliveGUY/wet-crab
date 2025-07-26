@@ -31,6 +31,9 @@ pub trait StoreDyn: Any {
     /// If the given entity has a component in this store, return its UI representation.
     fn get_component_ui_for_entity(&self, id: &EntityId) -> Option<crate::ComponentUI>;
     
+    /// Apply ComponentUI changes to the component in this store for the given entity.
+    fn apply_component_ui(&mut self, id: &EntityId, ui_data: &crate::ComponentUI);
+    
     /// Provide a way to get a `&dyn Any` for downcasting to concrete store type if needed.
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -95,6 +98,13 @@ impl<T: Component + Clone + 'static> StoreDyn for Store<T> {
             // Get the ComponentUI (Rc<RefCell<...>>), borrow it, and clone the inner data
             component.get_component_ui().borrow().clone()
         })
+    }
+
+    fn apply_component_ui(&mut self, id: &EntityId, ui_data: &crate::ComponentUI) {
+        // If this entity has a T component, apply the UI changes to it
+        if let Some(component) = self.0.get_mut(id) {
+            component.apply_ui(ui_data);
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -345,6 +355,16 @@ impl World {
             }
         }
         ui_components
+    }
+
+    /// Apply ComponentUI changes to a component dynamically using TypeId lookup
+    pub fn apply_component_ui_by_type(&mut self, entity_id: &EntityId, type_id: &TypeId, ui_data: &crate::ComponentUI) -> bool {
+        if let Some(store) = self.stores.get_mut(type_id) {
+            store.apply_component_ui(entity_id, ui_data);
+            true
+        } else {
+            false
+        }
     }
 }
 
