@@ -1,8 +1,18 @@
 import { Colors } from "../globals/colors.slint";
+import { InterfaceState } from "../globals/state.slint";
 
 export component Textfield {
     in property <string> label;
     in-out property <string> value;
+    in property <string> entity-id;
+    in property <string> component-name;
+
+    // Trigger callback when value changes
+    changed value => {
+        if (entity-id != "" && component-name != "" && label != "") {
+            InterfaceState.attribute-changed(entity-id, component-name, label, value);
+        }
+    }
 
     VerticalLayout {
         padding: 12px;

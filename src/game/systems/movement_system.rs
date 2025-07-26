@@ -1,6 +1,7 @@
 // Import types and functions from parent scope
 use crate::index::engine::components::{SystemTrait, CameraComponent};
 use crate::index::engine::systems::event_system::Event;
+use crate::index::engine::Component; // Import Component trait for update_component_ui
 use crate::index::PLAYER_ENTITY_ID;
 
 #[derive(Debug)]
@@ -23,6 +24,7 @@ impl SystemTrait for CameraRotationSystem {
 
         query_by_id!(player_entity_id, (CameraComponent), |camera| {
             camera.add_rotation_delta(pitch_delta, yaw_delta);
+            camera.update_component_ui(&player_entity_id); // Update UI after component change
         });
     }
 }
@@ -79,6 +81,7 @@ impl SystemTrait for MovementSystem {
 
                 _ => {}
             }
+            camera.update_component_ui(&player_entity_id); // Update UI after component change
         });
     }
 }

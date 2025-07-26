@@ -33,8 +33,7 @@ export component EntityListItem {
         clicked => {
             InterfaceState.selected-index = root.entity-id;
             InterfaceState.selected-title = root.title;
-
-            InterfaceState.selected-changed(root.entity-id)
+            InterfaceState.entity-selected(root.entity-id);
         }
     }
 }

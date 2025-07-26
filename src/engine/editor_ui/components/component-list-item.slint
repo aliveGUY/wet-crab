@@ -5,6 +5,8 @@ import { AttributeUI } from "../models/AttributeUI.slint";
 
 export component ComponentListItem {
     in property <ComponentUI> component;
+    in property <string> entity-id;
+    
     Rectangle {
         border-radius: 6px;
         background: Colors.card-background;
@@ -22,6 +24,8 @@ export component ComponentListItem {
             for attributes in component.attributes: Textfield {
                 label: attributes.name;
                 value: attributes.value;
+                entity-id: root.entity-id;
+                component-name: component.name;
             }
         }
     }

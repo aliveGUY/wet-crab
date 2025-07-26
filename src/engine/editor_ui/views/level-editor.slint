@@ -45,6 +45,7 @@ export component LevelEditorUI inherits Window {
 
                 clicked => {
                     InterfaceState.selected-index = "";
+                    InterfaceState.entity-deselected();
                 }
             }
 
@@ -58,6 +59,7 @@ export component LevelEditorUI inherits Window {
 
             for component in InterfaceState.components: ComponentListItem {
                 component: component;
+                entity-id: InterfaceState.selected-index;
             }
         }
     }

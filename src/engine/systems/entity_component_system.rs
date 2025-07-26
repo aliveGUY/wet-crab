@@ -13,41 +13,43 @@
 // singleton directly. We ship ready‑made implementations up to **ten**
 // components – extend if you need more.
 
-use once_cell::sync::Lazy;
-use slint::SharedString;
-use std::{ any::{ Any, TypeId }, collections::HashMap, sync::{ RwLock, RwLockWriteGuard } };
+use std::{ any::{ Any, TypeId }, collections::HashMap, cell::RefCell };
 use uuid::Uuid;
 
-#[derive(Clone)]
-pub struct AttributeUI {
-    pub name: SharedString,
-    pub value: SharedString,
-    pub dt_type: SharedString,
+// Import Slint-generated types directly
+// These will be available after slint::include_modules!() is called
+// We'll use them through the crate root imports
+
+pub trait Component: Any {
+    fn apply_ui(&mut self, component_ui: &crate::ComponentUI);                    // Apply UI changes to component
+    fn update_component_ui(&mut self, entity_id: &str);                          // Update SharedStrings when component changes
+    fn get_component_ui(&self) -> std::rc::Rc<std::cell::RefCell<crate::ComponentUI>>; // Return direct reference for live updates
 }
 
-#[derive(Clone)]
-pub struct ComponentUI {
-    pub name: SharedString,
-    pub attributes: Vec<AttributeUI>,
-}
-
-pub trait Component: Any + Send + Sync {
-    fn to_ui(&self) -> ComponentUI;
-    fn apply_ui(&mut self, component_ui: &ComponentUI);
+// Dynamic store trait for collecting ComponentUI without hardcoding component types
+pub trait StoreDyn: Any {
+    /// If the given entity has a component in this store, return its UI representation.
+    fn get_component_ui_for_entity(&self, id: &EntityId) -> Option<crate::ComponentUI>;
+    
+    /// Provide a way to get a `&dyn Any` for downcasting to concrete store type if needed.
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 pub type EntityId = String;
 
 // ——————————————————————————————————————————————————————————— global state ————
 
-pub static WORLD: Lazy<RwLock<World>> = Lazy::new(|| RwLock::new(World::default()));
-pub fn world() -> RwLockWriteGuard<'static, World> {
-    WORLD.write().expect("world lock")
+thread_local! {
+    pub static WORLD: RefCell<World> = RefCell::new(World::default());
 }
 
 /// Convenience function to spawn a new entity using the global world singleton
 pub fn spawn() -> EntityId {
-    world().spawn()
+    WORLD.with(|w| {
+        let mut world = w.borrow_mut();
+        world.spawn()
+    })
 }
 
 // ———————————————————————————————————————————————— internal structs ————
@@ -85,9 +87,27 @@ impl<T: Component> Store<T> {
     }
 }
 
+// Implement StoreDyn for Store<T> to enable dynamic ComponentUI collection
+impl<T: Component + Clone + 'static> StoreDyn for Store<T> {
+    fn get_component_ui_for_entity(&self, id: &EntityId) -> Option<crate::ComponentUI> {
+        // If this entity has a T component, get its UI state
+        self.0.get(id).map(|component| {
+            // Get the ComponentUI (Rc<RefCell<...>>), borrow it, and clone the inner data
+            component.get_component_ui().borrow().clone()
+        })
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 pub struct World {
-    stores: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
-    component_stores: HashMap<TypeId, HashMap<EntityId, Box<dyn Component>>>,
+    stores: HashMap<TypeId, Box<dyn StoreDyn>>,
     meta: HashMap<EntityId, ComponentMask>,
     registry: ComponentRegistry,
 }
@@ -95,7 +115,6 @@ impl Default for World {
     fn default() -> Self {
         Self {
             stores: HashMap::new(),
-            component_stores: HashMap::new(),
             meta: HashMap::new(),
             registry: ComponentRegistry::default(),
         }
@@ -111,22 +130,24 @@ impl World {
         id
     }
 
-    pub fn insert<T: Component + Clone>(&mut self, id: &EntityId, comp: T) {
+    pub fn insert<T: Component + Clone + 'static>(&mut self, id: &EntityId, comp: T) {
         let bit = self.registry.bit_for::<T>();
         let mask_bit = 1u64 << bit;
         let type_id = TypeId::of::<T>();
 
-        // Insert into typed store
-        let store = self.stores
+        // Insert into typed store (as trait object)
+        let store_dyn = self.stores
             .entry(type_id)
-            .or_insert_with(|| Box::new(Store::<T>::default()))
+            .or_insert_with(|| {
+                // Create a new Store<T> and cast to Box<dyn StoreDyn>
+                Box::new(Store::<T>::default()) as Box<dyn StoreDyn>
+            });
+        // Now `store_dyn` is a Box<dyn StoreDyn> but we know it's actually a Store<T>
+        // Downcast it to insert the component
+        store_dyn.as_any_mut()
             .downcast_mut::<Store<T>>()
-            .unwrap();
-        store.insert(id, comp.clone());
-
-        // Insert into component trait store
-        let component_store = self.component_stores.entry(type_id).or_insert_with(HashMap::new);
-        component_store.insert(id.clone(), Box::new(comp));
+            .unwrap()
+            .insert(id, comp.clone());
 
         // Update entity mask
         self.meta
@@ -156,6 +177,7 @@ impl World {
                 let store = self.stores
                     .get_mut(&TypeId::of::<T>())
                     .unwrap()
+                    .as_any_mut()
                     .downcast_mut::<Store<T>>()
                     .unwrap();
                 return store.get_mut(entity_id);
@@ -164,22 +186,6 @@ impl World {
         None
     }
 
-    // Sync typed storage to trait object storage for a specific component
-    fn sync_component_to_trait_storage<T: Component + Clone>(&mut self, entity_id: &EntityId) {
-        let type_id = TypeId::of::<T>();
-        
-        // Get the updated component from typed storage
-        if let Some(typed_store) = self.stores.get(&type_id) {
-            if let Some(typed_store) = typed_store.downcast_ref::<Store<T>>() {
-                if let Some(component) = typed_store.0.get(entity_id) {
-                    // Update the trait object storage
-                    if let Some(trait_store) = self.component_stores.get_mut(&type_id) {
-                        trait_store.insert(entity_id.clone(), Box::new(component.clone()));
-                    }
-                }
-            }
-        }
-    }
 
     // Read-only single component access
     pub fn get_component_readonly<T: Component>(&self, entity_id: &EntityId) -> Option<&T> {
@@ -192,7 +198,7 @@ impl World {
 
         if let Some(&entity_mask) = self.meta.get(entity_id) {
             if (entity_mask & mask) == mask {
-                let store = self.stores.get(&type_id)?.downcast_ref::<Store<T>>().unwrap();
+                let store = self.stores.get(&type_id)?.as_any().downcast_ref::<Store<T>>().unwrap();
                 return store.0.get(entity_id);
             }
         }
@@ -247,8 +253,6 @@ impl World {
     {
         if let Some(c1) = self.get_component_for_entity::<C1>(entity) {
             f(c1);
-            // Sync the updated component to trait object storage
-            self.sync_component_to_trait_storage::<C1>(entity);
         }
     }
 
@@ -292,7 +296,7 @@ impl World {
         for (entity_id, &entity_mask) in &self.meta {
             if (entity_mask & mask) == mask {
                 if let Some(store) = self.stores.get(&type_id) {
-                    if let Some(store) = store.downcast_ref::<Store<T>>() {
+                    if let Some(store) = store.as_any().downcast_ref::<Store<T>>() {
                         if let Some(component) = store.0.get(entity_id) {
                             results.push((entity_id.clone(), component.clone()));
                         }
@@ -329,41 +333,18 @@ impl World {
         results
     }
 
-    /// Get all components for a specific entity as ComponentUI
-    pub fn get_all_components_ui_for_entity(&self, entity_id: &EntityId) -> Vec<ComponentUI> {
-        let mut components_ui = Vec::new();
-
-        let Some(&entity_mask) = self.meta.get(entity_id) else {
-            return components_ui;
-        };
-
-        for (&type_id, &bit) in &self.registry.bits {
-            let mask = 1u64 << bit;
-            if (entity_mask & mask) != mask {
-                continue;
+    /// Get all components for a specific entity as ComponentUI - Dynamic implementation using StoreDyn
+    pub fn get_all_components_ui_for_entity(&self, entity_id: &EntityId) -> Vec<crate::ComponentUI> {
+        let mut ui_components = Vec::new();
+        if let Some(_mask) = self.meta.get(entity_id) {
+            // Iterate over all component stores and collect UI for this entity
+            for store in self.stores.values() {
+                if let Some(component_ui) = store.get_component_ui_for_entity(entity_id) {
+                    ui_components.push(component_ui);
+                }
             }
-
-            // Read from the typed storage instead of trait object storage
-            // This ensures we get the most up-to-date component data
-            let Some(typed_store) = self.stores.get(&type_id) else {
-                continue;
-            };
-
-            // We need to dynamically call to_ui() on the typed component
-            // Since we don't know the concrete type at compile time, we need to use the trait object storage
-            // But we should sync it first from the typed storage
-            let Some(trait_store) = self.component_stores.get(&type_id) else {
-                continue;
-            };
-
-            let Some(component) = trait_store.get(entity_id) else {
-                continue;
-            };
-
-            components_ui.push(component.to_ui());
         }
-
-        components_ui
+        ui_components
     }
 }
 
@@ -387,7 +368,10 @@ macro_rules! insert_many {
         use std::boxed::Box;
         let mut v: Vec<Box<dyn crate::index::engine::systems::entity_component_system::Insertable>> = Vec::new();
         $( v.push(Box::new($comp)); )+
-        crate::index::engine::systems::entity_component_system::world().insert_dyn(&$entity, v);
+        crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+            let mut world = w.borrow_mut();
+            world.insert_dyn(&$entity, v);
+        });
         }
     };
 }
@@ -396,11 +380,17 @@ macro_rules! insert_many {
 macro_rules! query {
     // Single component
     (($c1:ty), | $id:ident, $a1:ident | $body:block) => {
-        crate::index::engine::systems::entity_component_system::world().query1::<_, $c1>(|$id, $a1| $body)
+        crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+            let mut world = w.borrow_mut();
+            world.query1::<_, $c1>(|$id, $a1| $body)
+        })
     };
     // Two components
     (($c1:ty, $c2:ty), | $id:ident, $a1:ident, $a2:ident | $body:block) => {
-        crate::index::engine::systems::entity_component_system::world().query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
+        crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+            let mut world = w.borrow_mut();
+            world.query2::<_, $c1, $c2>(|$id, $a1, $a2| $body)
+        })
     };
 }
 
@@ -408,11 +398,17 @@ macro_rules! query {
 macro_rules! query_by_id {
     // Single component
     ($eid:expr, ($c1:ty), | $a1:ident | $body:block) => {
-        crate::index::engine::systems::entity_component_system::world().query_by_id1::<_, $c1>(&$eid, |$a1| $body)
+        crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+            let mut world = w.borrow_mut();
+            world.query_by_id1::<_, $c1>(&$eid, |$a1| $body)
+        })
     };
     // Two components
     ($eid:expr, ($c1:ty, $c2:ty), | $a1:ident, $a2:ident | $body:block) => {
-        crate::index::engine::systems::entity_component_system::world().query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
+        crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+            let mut world = w.borrow_mut();
+            world.query_by_id2::<_, $c1, $c2>(&$eid, |$a1, $a2| $body)
+        })
     };
 }
 
@@ -421,8 +417,10 @@ macro_rules! query_by_id {
 macro_rules! get_query_by_id {
     ($eid:expr, ($c1:ty)) => {
         {
-            let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
-            world.get_component_readonly::<$c1>(&$eid).cloned()
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let world = w.borrow();
+                world.get_component_readonly::<$c1>(&$eid).cloned()
+            })
         }
     };
 }
@@ -432,8 +430,10 @@ macro_rules! get_query_by_id {
 macro_rules! query_get_all {
     ($c1:ty) => {
         {
-            let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
-            world.query_get_all::<$c1>()
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let world = w.borrow();
+                world.query_get_all::<$c1>()
+            })
         }
     };
 }
@@ -443,8 +443,10 @@ macro_rules! query_get_all {
 macro_rules! query_get_all_ids {
     ($c1:ty) => {
         {
-            let world = crate::index::engine::systems::entity_component_system::WORLD.read().expect("world lock");
-            world.query_get_all_ids::<$c1>()
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let world = w.borrow();
+                world.query_get_all_ids::<$c1>()
+            })
         }
     };
 }
@@ -453,8 +455,10 @@ macro_rules! query_get_all_ids {
 macro_rules! get_all_components_by_id {
     ($eid:expr) => {
         {
-        let world = crate::index::engine::systems::entity_component_system::WORLD.read().unwrap();
-        world.get_all_components_ui_for_entity(&$eid)
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let world = w.borrow();
+                world.get_all_components_ui_for_entity(&$eid)
+            })
         }
     };
 }
