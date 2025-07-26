@@ -11,6 +11,7 @@ use crate::index::engine::utils::gltf_loader_utils::*;
 pub enum Assets {
     TestingDoll,
     Chair,
+    BlockoutPlatform,
 }
 
 pub struct AssetsManager {
@@ -73,6 +74,15 @@ impl AssetsManager {
             include_bytes!("../../assets/meshes/chair.bin"),
             include_bytes!("../../assets/textures/wood-texture.png"),
             Assets::Chair,
+            static_shader,
+            gl
+        );
+
+        self.load_static_gltf(
+            include_str!("../../assets/meshes/blockout_platform.gltf"),
+            include_bytes!("../../assets/meshes/blockout_platform.bin"),
+            include_bytes!("../../assets/textures/orange-blueprint.png"),
+            Assets::BlockoutPlatform,
             static_shader,
             gl
         );
@@ -262,19 +272,13 @@ thread_local! {
 
 // Public API
 pub fn initialize_asset_manager(gl: &glow::Context) {
-    ASSETS_MANAGER.with(|manager| {
-        manager.borrow_mut().initialize_asset_manager(gl)
-    })
+    ASSETS_MANAGER.with(|manager| { manager.borrow_mut().initialize_asset_manager(gl) })
 }
 
 pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3DComponent {
-    ASSETS_MANAGER.with(|manager| {
-        manager.borrow().get_static_object_copy(asset_name)
-    })
+    ASSETS_MANAGER.with(|manager| { manager.borrow().get_static_object_copy(asset_name) })
 }
 
 pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3DComponent {
-    ASSETS_MANAGER.with(|manager| {
-        manager.borrow().get_animated_object_copy(asset_name)
-    })
+    ASSETS_MANAGER.with(|manager| { manager.borrow().get_animated_object_copy(asset_name) })
 }

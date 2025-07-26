@@ -1,0 +1,247 @@
+[
+  [
+    {
+      "name": "Metadata",
+      "attributes": [
+        {
+          "name": "title",
+          "value": "TestingDoll",
+          "dt_type": "STRING"
+        }
+      ]
+    },
+    {
+      "name": "Transform",
+      "attributes": [
+        {
+          "name": "x position",
+          "value": "-2.000",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y position",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z position",
+          "value": "-5.000",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "x scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "pitch (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "yaw (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "roll (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        }
+      ]
+    },
+    {
+      "name": "Animated Object 3D",
+      "attributes": []
+    }
+  ],
+  [
+    {
+      "name": "Metadata",
+      "attributes": [
+        {
+          "name": "title",
+          "value": "Player Camera",
+          "dt_type": "STRING"
+        }
+      ]
+    },
+    {
+      "name": "Camera",
+      "attributes": [
+        {
+          "name": "x position",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y position",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z position",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "pitch (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "yaw (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "roll (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        }
+      ]
+    }
+  ],
+  [
+    {
+      "name": "Metadata",
+      "attributes": [
+        {
+          "name": "title",
+          "value": "Chair",
+          "dt_type": "STRING"
+        }
+      ]
+    },
+    {
+      "name": "Transform",
+      "attributes": [
+        {
+          "name": "x position",
+          "value": "2.000",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y position",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z position",
+          "value": "-5.000",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "x scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "pitch (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "yaw (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "roll (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        }
+      ]
+    },
+    {
+      "name": "Static Object 3D",
+      "attributes": []
+    }
+  ],
+  [
+    {
+      "name": "Metadata",
+      "attributes": [
+        {
+          "name": "title",
+          "value": "Blockout Platform",
+          "dt_type": "STRING"
+        }
+      ]
+    },
+    {
+      "name": "Transform",
+      "attributes": [
+        {
+          "name": "x position",
+          "value": "2.000",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y position",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z position",
+          "value": "-5.000",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "x scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "y scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "z scale",
+          "value": "1.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "pitch (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "yaw (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        },
+        {
+          "name": "roll (degrees)",
+          "value": "0.0",
+          "dt_type": "FLOAT"
+        }
+      ]
+    },
+    {
+      "name": "Static Object 3D",
+      "attributes": []
+    }
+  ]
+]
