@@ -2,10 +2,21 @@ import { Colors } from "../globals/colors.slint";
 import { Textfield } from "../common/textfield.slint";
 import { ComponentUI } from "../models/ComponentUI.slint";
 import { AttributeUI } from "../models/AttributeUI.slint";
+import { InterfaceState } from "../globals/state.slint";
 
 export component ComponentListItem {
     in property <ComponentUI> component;
     in property <string> entity-id;
+    
+    // Internal state to track component changes
+    property <ComponentUI> internal-component: component;
+    
+    // Function to trigger component change callback
+    function trigger-component-change() {
+        if (entity-id != "" && internal-component.name != "") {
+            InterfaceState.component-changed(entity-id, internal-component.name, internal-component);
+        }
+    }
     
     Rectangle {
         border-radius: 6px;
@@ -21,11 +32,17 @@ export component ComponentListItem {
                 horizontal-alignment: center;
             }
 
-            for attributes in component.attributes: Textfield {
+            for attributes[index] in component.attributes: Textfield {
                 label: attributes.name;
                 value: attributes.value;
-                entity-id: root.entity-id;
-                component-name: component.name;
+                
+                // Handle attribute changes by updating internal component and triggering callback
+                changed value => {
+                    // Update the internal component's attribute
+                    internal-component.attributes[index].value = self.value;
+                    // Trigger the component-level change
+                    root.trigger-component-change();
+                }
             }
         }
     }

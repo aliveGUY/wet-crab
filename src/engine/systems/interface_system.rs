@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
-use crate::{ InterfaceState, LevelEditorUI, ComponentUI, AttributeUI };
+use crate::{ InterfaceState, LevelEditorUI, ComponentUI };
 use crate::{ query_get_all, get_all_components_by_id, query_by_id };
 use crate::index::engine::components::{ Metadata, Transform };
 use crate::index::engine::components::camera::Camera;
@@ -18,6 +18,53 @@ pub struct InterfaceSystem {
 static INTERFACE_SYSTEM: Lazy<Mutex<Option<InterfaceSystem>>> = Lazy::new(|| Mutex::new(None));
 
 impl InterfaceSystem {
+    /// Handle component changes from UI - update ECS components immediately with complete ComponentUI
+    pub fn handle_component_change(
+        entity_id: String,
+        component_name: String,
+        updated_component: ComponentUI
+    ) {
+        println!(
+            "🔄 Component changed: Entity={}, Component={}, Attributes={}",
+            entity_id,
+            component_name,
+            updated_component.attributes.row_count()
+        );
+
+        // Apply the complete ComponentUI to the appropriate component type in ECS
+        // Use the same match for now, but this could be made dynamic with StoreDyn in the future
+        match component_name.as_str() {
+            "Metadata" => {
+                query_by_id!(entity_id, (Metadata), |metadata| {
+                    metadata.apply_ui(&updated_component);
+                });
+            }
+            "Transform" => {
+                query_by_id!(entity_id, (Transform), |transform| {
+                    transform.apply_ui(&updated_component);
+                });
+            }
+            "Camera" => {
+                query_by_id!(entity_id, (Camera), |camera| {
+                    camera.apply_ui(&updated_component);
+                });
+            }
+            "Static Object 3D" => {
+                query_by_id!(entity_id, (StaticObject3D), |static_obj| {
+                    static_obj.apply_ui(&updated_component);
+                });
+            }
+            "Animated Object 3D" => {
+                query_by_id!(entity_id, (AnimatedObject3D), |animated_obj| {
+                    animated_obj.apply_ui(&updated_component);
+                });
+            }
+            _ => {
+                println!("⚠️ Unknown component type: {}", component_name);
+            }
+        }
+    }
+
     /// Create a new InterfaceSystem instance
     pub fn new(ui_context: &LevelEditorUI) -> Self {
         let ui_handle = ui_context.as_weak();
@@ -30,14 +77,13 @@ impl InterfaceSystem {
         // Set up callbacks
         let state = ui_context.global::<InterfaceState>();
 
-        // Set up attribute change callback
-        state.on_attribute_changed({
-            move |entity_id, component_name, attribute_name, new_value| {
-                Self::handle_attribute_change(
+        // Set up component change callback
+        state.on_component_changed({
+            move |entity_id, component_name, updated_component| {
+                Self::handle_component_change(
                     entity_id.to_string(),
                     component_name.to_string(),
-                    attribute_name.to_string(),
-                    new_value.to_string()
+                    updated_component
                 );
             }
         });
@@ -149,66 +195,6 @@ impl InterfaceSystem {
     /// Get the currently selected entity ID
     pub fn get_selected_entity(&self) -> Option<&String> {
         self.selected_entity_id.as_ref()
-    }
-
-    /// Handle attribute changes from UI - update ECS components immediately
-    pub fn handle_attribute_change(
-        entity_id: String,
-        component_name: String,
-        attribute_name: String,
-        new_value: String
-    ) {
-        println!(
-            "🔄 Attribute changed: Entity={}, Component={}, Attribute={}, Value={}",
-            entity_id,
-            component_name,
-            attribute_name,
-            new_value
-        );
-
-        // Create a ComponentUI with the single changed attribute to apply to ECS
-        let changed_attribute = AttributeUI {
-            name: attribute_name.into(),
-            value: new_value.into(),
-            dt_type: "STRING".into(), // We'll let the component handle type conversion
-        };
-
-        let component_ui = ComponentUI {
-            name: component_name.clone().into(),
-            attributes: ModelRc::new(VecModel::from(vec![changed_attribute])),
-        };
-
-        // Apply the change to the appropriate component type in ECS
-        match component_name.as_str() {
-            "Metadata" => {
-                query_by_id!(entity_id, (Metadata), |metadata| {
-                    metadata.apply_ui(&component_ui);
-                });
-            }
-            "Transform" => {
-                query_by_id!(entity_id, (Transform), |transform| {
-                    transform.apply_ui(&component_ui);
-                });
-            }
-            "Camera" => {
-                query_by_id!(entity_id, (Camera), |camera| {
-                    camera.apply_ui(&component_ui);
-                });
-            }
-            "Static Object 3D" => {
-                query_by_id!(entity_id, (StaticObject3D), |static_obj| {
-                    static_obj.apply_ui(&component_ui);
-                });
-            }
-            "Animated Object 3D" => {
-                query_by_id!(entity_id, (AnimatedObject3D), |animated_obj| {
-                    animated_obj.apply_ui(&component_ui);
-                });
-            }
-            _ => {
-                println!("⚠️ Unknown component type: {}", component_name);
-            }
-        }
     }
 
     // Static methods for backward compatibility with existing code

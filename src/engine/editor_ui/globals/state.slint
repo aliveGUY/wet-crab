@@ -7,7 +7,7 @@ export global InterfaceState {
     in-out property <[{entity_id: string, title: string}]> entities: [];
     in-out property <[ComponentUI]> components: [];
     
-    callback attribute-changed(string /* entity_id */, string /* component_name */, string /* attribute_name */, string /* new_value */);
+    callback component-changed(string /* entity_id */, string /* component_name */, ComponentUI /* updated_component */);
     callback entity-selected(string /* entity_id */);
     callback entity-deselected();
 }
