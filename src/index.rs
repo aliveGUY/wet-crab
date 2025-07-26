@@ -46,7 +46,7 @@ impl Program {
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
-        InterfaceSystem::update_entity_tree();
+        InterfaceSystem::update_entity_tree_global();
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
@@ -73,7 +73,6 @@ impl Program {
 
     pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) {
         RenderSystem::update(&self.gl, width, height);
-        InterfaceSystem::update();
     }
 
     pub fn get_gl_context(&self) -> &glow::Context {

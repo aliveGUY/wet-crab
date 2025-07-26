@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use once_cell::sync::Lazy;
+use std::cell::RefCell;
 use glow::HasContext;
 
 // Import required components - using the new module structure
@@ -255,20 +255,26 @@ fn create_shader_program(
     }
 }
 
-// Global singleton instance
-pub static ASSETS_MANAGER: Lazy<std::sync::Mutex<AssetsManager>> = Lazy::new(|| {
-    std::sync::Mutex::new(AssetsManager::new())
-});
+// Global singleton instance - single-threaded
+thread_local! {
+    static ASSETS_MANAGER: RefCell<AssetsManager> = RefCell::new(AssetsManager::new());
+}
 
 // Public API
 pub fn initialize_asset_manager(gl: &glow::Context) {
-    ASSETS_MANAGER.lock().unwrap().initialize_asset_manager(gl)
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow_mut().initialize_asset_manager(gl)
+    })
 }
 
 pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3DComponent {
-    ASSETS_MANAGER.lock().unwrap().get_static_object_copy(asset_name)
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().get_static_object_copy(asset_name)
+    })
 }
 
 pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3DComponent {
-    ASSETS_MANAGER.lock().unwrap().get_animated_object_copy(asset_name)
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().get_animated_object_copy(asset_name)
+    })
 }
