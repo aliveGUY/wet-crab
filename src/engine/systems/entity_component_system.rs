@@ -1,40 +1,17 @@
-// src/world.rs
-// Minimal ECS with **string‑based entity IDs**, a global singleton `World`,
-// variadic *insert* **and now variadic *query***.
-//
-//   • `insert_many!(id, C1(..), C2(..), …)` – insert multiple components atomically.
-//   • `query!((A, B, C), |id, a, b, c| { … })` – iterate over **all**
-//     entities that own *every* listed component.
-//   • `query_by_id!(id, (A, B, C), |a, b, c| { … })` – borrow those
-//     components for **one** entity.
-//
-// These procedures are implemented as *variadic macros* that expand to the
-// corresponding `queryN` / `withN` specialisations and use the global world
-// singleton directly. We ship ready‑made implementations up to **ten**
-// components – extend if you need more.
-
 use std::{ any::{ Any, TypeId }, collections::HashMap, cell::RefCell };
 use uuid::Uuid;
 
-// Import Slint-generated types directly
-// These will be available after slint::include_modules!() is called
-// We'll use them through the crate root imports
-
 pub trait Component: Any {
-    fn apply_ui(&mut self, component_ui: &crate::ComponentUI);                    // Apply UI changes to component
-    fn update_component_ui(&mut self, entity_id: &str);                          // Update SharedStrings when component changes
-    fn get_component_ui(&self) -> std::rc::Rc<std::cell::RefCell<crate::ComponentUI>>; // Return direct reference for live updates
+    fn apply_ui(&mut self, component_ui: &crate::ComponentUI);
+    fn update_component_ui(&mut self, entity_id: &str);
+    fn get_component_ui(&self) -> std::rc::Rc<std::cell::RefCell<crate::ComponentUI>>;
 }
 
-// Dynamic store trait for collecting ComponentUI without hardcoding component types
 pub trait StoreDyn: Any {
-    /// If the given entity has a component in this store, return its UI representation.
     fn get_component_ui_for_entity(&self, id: &EntityId) -> Option<crate::ComponentUI>;
-    
-    /// Apply ComponentUI changes to the component in this store for the given entity.
+
     fn apply_component_ui(&mut self, id: &EntityId, ui_data: &crate::ComponentUI);
-    
-    /// Provide a way to get a `&dyn Any` for downcasting to concrete store type if needed.
+
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
@@ -47,7 +24,6 @@ thread_local! {
     pub static WORLD: RefCell<World> = RefCell::new(World::default());
 }
 
-/// Convenience function to spawn a new entity using the global world singleton
 pub fn spawn() -> EntityId {
     WORLD.with(|w| {
         let mut world = w.borrow_mut();
@@ -110,7 +86,7 @@ impl<T: Component + Clone + 'static> StoreDyn for Store<T> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -146,18 +122,13 @@ impl World {
         let type_id = TypeId::of::<T>();
 
         // Insert into typed store (as trait object)
-        let store_dyn = self.stores
-            .entry(type_id)
-            .or_insert_with(|| {
-                // Create a new Store<T> and cast to Box<dyn StoreDyn>
-                Box::new(Store::<T>::default()) as Box<dyn StoreDyn>
-            });
+        let store_dyn = self.stores.entry(type_id).or_insert_with(|| {
+            // Create a new Store<T> and cast to Box<dyn StoreDyn>
+            Box::new(Store::<T>::default()) as Box<dyn StoreDyn>
+        });
         // Now `store_dyn` is a Box<dyn StoreDyn> but we know it's actually a Store<T>
         // Downcast it to insert the component
-        store_dyn.as_any_mut()
-            .downcast_mut::<Store<T>>()
-            .unwrap()
-            .insert(id, comp.clone());
+        store_dyn.as_any_mut().downcast_mut::<Store<T>>().unwrap().insert(id, comp.clone());
 
         // Update entity mask
         self.meta
@@ -195,7 +166,6 @@ impl World {
         }
         None
     }
-
 
     // Read-only single component access
     pub fn get_component_readonly<T: Component>(&self, entity_id: &EntityId) -> Option<&T> {
@@ -344,7 +314,10 @@ impl World {
     }
 
     /// Get all components for a specific entity as ComponentUI - Dynamic implementation using StoreDyn
-    pub fn get_all_components_ui_for_entity(&self, entity_id: &EntityId) -> Vec<crate::ComponentUI> {
+    pub fn get_all_components_ui_for_entity(
+        &self,
+        entity_id: &EntityId
+    ) -> Vec<crate::ComponentUI> {
         let mut ui_components = Vec::new();
         if let Some(_mask) = self.meta.get(entity_id) {
             // Iterate over all component stores and collect UI for this entity
@@ -358,13 +331,23 @@ impl World {
     }
 
     /// Apply ComponentUI changes to a component dynamically using TypeId lookup
-    pub fn apply_component_ui_by_type(&mut self, entity_id: &EntityId, type_id: &TypeId, ui_data: &crate::ComponentUI) -> bool {
+    pub fn apply_component_ui_by_type(
+        &mut self,
+        entity_id: &EntityId,
+        type_id: &TypeId,
+        ui_data: &crate::ComponentUI
+    ) -> bool {
         if let Some(store) = self.stores.get_mut(type_id) {
             store.apply_component_ui(entity_id, ui_data);
             true
         } else {
             false
         }
+    }
+
+    /// Get all entity IDs and their component masks for serialization
+    pub fn get_all_entities(&self) -> impl Iterator<Item = (&EntityId, &ComponentMask)> {
+        self.meta.iter()
     }
 }
 

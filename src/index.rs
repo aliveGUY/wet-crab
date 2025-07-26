@@ -11,7 +11,6 @@ pub mod game;
 
 use engine::*;
 use game::*;
-use engine::components::{ Transform, Metadata, CameraComponent };
 
 pub static PLAYER_ENTITY_ID: Lazy<RwLock<Option<EntityId>>> = Lazy::new(|| RwLock::new(None));
 
@@ -23,30 +22,22 @@ impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
         initialize_asset_manager(&gl);
 
-        let chair_entity_id = spawn();
-        insert_many!(
-            chair_entity_id,
-            get_static_object_copy(Assets::Chair),
-            Transform::new(2.0, -3.0, -5.0),
-            Metadata::new("Chair")
-        );
-
-        let doll_entity_id = spawn();
-        insert_many!(
-            doll_entity_id,
-            get_animated_object_copy(Assets::TestingDoll),
-            Transform::new(-2.0, -3.0, -5.0),
-            Metadata::new("TestingDoll")
-        );
-
-        let player_entity_id = spawn();
-        *PLAYER_ENTITY_ID.write().unwrap() = Some(player_entity_id.clone());
-        insert_many!(player_entity_id, CameraComponent::new(), Metadata::new("Player Camera"));
+        spawn_chair();
+        spawn_testing_doll();
+        spawn_player();
+        spawn_blockout_platform();
 
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
         InterfaceSystem::update_entity_tree_global();
+
+        // Demonstrate ECS serialization functionality
+        println!("🔄 Testing ECS serialization...");
+        save_world!("src/assets/scenes/test_world.json");
+
+        // You can uncomment the line below to test loading:
+        // load_world!("test_world.json");
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
