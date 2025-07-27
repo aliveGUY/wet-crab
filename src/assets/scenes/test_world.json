@@ -4,6 +4,44 @@
       "type": "Transform",
       "data": {
         "matrix": [
+          1.0,
+          0.0,
+          0.0,
+          -2.0,
+          0.0,
+          1.0,
+          0.0,
+          -3.0,
+          0.0,
+          0.0,
+          1.0,
+          -5.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "TestingDoll",
+        "role": null
+      }
+    },
+    {
+      "type": "AnimatedObject3D",
+      "data": {
+        "asset_type": "TestingDoll"
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
           -4.371139e-8,
           -1.0,
           0.0,
@@ -45,7 +83,7 @@
           1.0,
           0.0,
           0.0,
-          -2.0,
+          6.0,
           0.0,
           1.0,
           0.0,
@@ -64,14 +102,14 @@
     {
       "type": "Metadata",
       "data": {
-        "title": "TestingDoll",
+        "title": "Blockout Platform",
         "role": null
       }
     },
     {
-      "type": "AnimatedObject3D",
+      "type": "StaticObject3D",
       "data": {
-        "asset_type": "TestingDoll"
+        "asset_type": "BlockoutPlatform"
       }
     }
   ],
@@ -118,14 +156,14 @@
       "type": "Transform",
       "data": {
         "matrix": [
+          -4.371139e-8,
+          -1.0,
+          0.0,
+          7.0,
           1.0,
+          -4.371139e-8,
           0.0,
-          0.0,
-          6.0,
-          0.0,
-          1.0,
-          0.0,
-          -4.0,
+          -2.0,
           0.0,
           0.0,
           1.0,
@@ -163,50 +201,12 @@
       "type": "Camera",
       "data": {
         "position": [
-          4.4231524,
-          0.0,
-          -2.2256513
+          5.582689,
+          -2.0000002,
+          -3.1130228
         ],
-        "pitch": 0.45658264,
-        "yaw": 0.17107564
-      }
-    }
-  ],
-  [
-    {
-      "type": "Transform",
-      "data": {
-        "matrix": [
-          -4.371139e-8,
-          -1.0,
-          0.0,
-          7.0,
-          1.0,
-          -4.371139e-8,
-          0.0,
-          -2.0,
-          0.0,
-          0.0,
-          1.0,
-          -5.0,
-          0.0,
-          0.0,
-          0.0,
-          1.0
-        ]
-      }
-    },
-    {
-      "type": "Metadata",
-      "data": {
-        "title": "Blockout Platform",
-        "role": null
-      }
-    },
-    {
-      "type": "StaticObject3D",
-      "data": {
-        "asset_type": "BlockoutPlatform"
+        "pitch": 0.20520203,
+        "yaw": 0.16867337
       }
     }
   ]

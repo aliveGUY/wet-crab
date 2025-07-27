@@ -45,6 +45,8 @@ impl SystemTrait for MovementSystem {
         let mut back = false;
         let mut left = false;
         let mut right = false;
+        let mut up = false;
+        let mut down = false;
 
         for token in dir_text.split('-') {
             match token {
@@ -52,6 +54,8 @@ impl SystemTrait for MovementSystem {
                 "backward" => back = true,
                 "left" => left = true,
                 "right" => right = true,
+                "up" => up = true,
+                "down" => down = true,
                 _ => {}
             }
         }
@@ -64,10 +68,15 @@ impl SystemTrait for MovementSystem {
             left = false;
             right = false;
         }
+        if up && down {
+            up = false;
+            down = false;
+        }
 
         const STEP: f32 = 0.1;
 
         query_by_id!(player_entity_id, (CameraComponent), |camera| {
+            // Handle horizontal movement (existing logic)
             match (fwd, back, left, right) {
                 (true, false, false, false) => camera.move_forward(STEP),
                 (false, true, false, false) => camera.move_back(STEP),
@@ -81,6 +90,14 @@ impl SystemTrait for MovementSystem {
 
                 _ => {}
             }
+            
+            // Handle vertical movement (new logic)
+            match (up, down) {
+                (true, false) => camera.move_up(STEP),
+                (false, true) => camera.move_down(STEP),
+                _ => {}
+            }
+            
             camera.update_component_ui(&player_entity_id); // Update UI after component change
         });
     }

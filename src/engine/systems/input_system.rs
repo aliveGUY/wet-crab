@@ -62,8 +62,8 @@ use std::sync::Mutex;
 use std::collections::HashSet;
 
 pub struct DesktopInputHandler {
-    // WASD state tracking for Winit events (for multi-key combinations)
-    wasd_keys: Mutex<HashMap<KeyCode, bool>>,
+    // Movement keys state tracking for Winit events (WASD + Space + Ctrl)
+    movement_keys: Mutex<HashMap<KeyCode, bool>>,
     // Track currently pressed keys for continuous movement
     pressed_keys: Mutex<HashSet<KeyCode>>,
     // FPS cursor lock system
@@ -75,7 +75,7 @@ pub struct DesktopInputHandler {
 impl DesktopInputHandler {
     pub fn new() -> Self {
         Self {
-            wasd_keys: Mutex::new(HashMap::new()),
+            movement_keys: Mutex::new(HashMap::new()),
             pressed_keys: Mutex::new(HashSet::new()),
             cursor_locked: Mutex::new(false),
             last_mouse_position: Mutex::new(None),
@@ -138,6 +138,41 @@ impl DesktopInputHandler {
         None
     }
     
+    /// Process all movement keys with responsive movement (WASD + Space + Ctrl)
+    fn process_movement_key(&self, key_code: KeyCode, pressed: bool) -> Option<Event> {
+        // Update both the movement_keys HashMap and pressed_keys HashSet
+        let mut movement_keys = self.movement_keys.lock().ok()?;
+        movement_keys.insert(key_code, pressed);
+        
+        // Update pressed_keys HashSet for continuous movement
+        let mut pressed_keys = self.pressed_keys.lock().ok()?;
+        if pressed {
+            pressed_keys.insert(key_code);
+        } else {
+            pressed_keys.remove(&key_code);
+        }
+        
+        // Get all movement key states
+        let w = movement_keys.get(&KeyCode::KeyW).copied().unwrap_or(false);
+        let a = movement_keys.get(&KeyCode::KeyA).copied().unwrap_or(false);
+        let s = movement_keys.get(&KeyCode::KeyS).copied().unwrap_or(false);
+        let d = movement_keys.get(&KeyCode::KeyD).copied().unwrap_or(false);
+        let up = movement_keys.get(&KeyCode::KeyE).copied().unwrap_or(false);
+        let down = movement_keys.get(&KeyCode::KeyQ).copied().unwrap_or(false);
+        
+        // Calculate new direction using extended input_utils function
+        let new_direction = crate::index::engine::utils::input_utils::calculate_movement_direction_3d(w, a, s, d, up, down);
+        
+        // For immediate response, always send an event when keys change
+        println!("[INPUT] Movement Key {:?} {} -> Movement: {}", 
+                key_code, if pressed { "pressed" } else { "released" }, new_direction);
+        
+        return Some(Event {
+            event_type: EventType::Move,
+            payload: Box::new(new_direction),
+        });
+    }
+
     /// Process keyboard input with flattened structure
     fn process_keyboard_input(&self, key_event: &winit::event::KeyEvent) -> Option<Event> {
         let PhysicalKey::Code(key_code) = key_event.physical_key else {
@@ -147,8 +182,8 @@ impl DesktopInputHandler {
         let pressed = key_event.state == ElementState::Pressed;
         
         match key_code {
-            KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD => {
-                self.process_wasd_key(key_code, pressed)
+            KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD | KeyCode::KeyE | KeyCode::KeyQ => {
+                self.process_movement_key(key_code, pressed)
             }
             KeyCode::Tab => {
                 self.process_tab_key(pressed)
@@ -163,38 +198,6 @@ impl DesktopInputHandler {
                 None
             }
         }
-    }
-    
-    /// Process WASD keys with responsive movement (only send events when movement changes)
-    fn process_wasd_key(&self, key_code: KeyCode, pressed: bool) -> Option<Event> {
-        // Update both the old wasd_keys HashMap and new pressed_keys HashSet
-        let mut wasd_keys = self.wasd_keys.lock().ok()?;
-        wasd_keys.insert(key_code, pressed);
-        
-        // Update pressed_keys HashSet for continuous movement
-        let mut pressed_keys = self.pressed_keys.lock().ok()?;
-        if pressed {
-            pressed_keys.insert(key_code);
-        } else {
-            pressed_keys.remove(&key_code);
-        }
-        
-        let w = wasd_keys.get(&KeyCode::KeyW).copied().unwrap_or(false);
-        let a = wasd_keys.get(&KeyCode::KeyA).copied().unwrap_or(false);
-        let s = wasd_keys.get(&KeyCode::KeyS).copied().unwrap_or(false);
-        let d = wasd_keys.get(&KeyCode::KeyD).copied().unwrap_or(false);
-        
-        // Calculate new direction using input_utils function
-        let new_direction = crate::index::engine::utils::input_utils::calculate_movement_direction(w, a, s, d);
-        
-        // For immediate response, always send an event when keys change
-        println!("[INPUT] WASD Key {:?} {} -> Movement: {}", 
-                key_code, if pressed { "pressed" } else { "released" }, new_direction);
-        
-        return Some(Event {
-            event_type: EventType::Move,
-            payload: Box::new(new_direction),
-        });
     }
     
     /// Process Tab key for cursor lock toggle
