@@ -4,18 +4,170 @@
       "type": "Transform",
       "data": {
         "matrix": [
-          1.0,
+          -1.09278474e-7,
+          -1.0,
+          0.0,
+          40.047,
+          2.5,
+          -4.371139e-8,
+          0.0,
+          2.5,
           0.0,
           0.0,
-          2.0,
-          0.0,
-          1.0,
-          0.0,
-          -3.0,
-          0.0,
-          0.0,
-          1.0,
+          5.0,
           -5.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "Blockout Platform",
+        "role": null
+      }
+    },
+    {
+      "type": "StaticObject3D",
+      "data": {
+        "asset_type": "BlockoutPlatform"
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
+          -1.09278474e-7,
+          1.0,
+          0.0,
+          50.047,
+          -2.5,
+          -4.371139e-8,
+          0.0,
+          2.5,
+          0.0,
+          0.0,
+          5.6,
+          0.5,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "Blockout Platform",
+        "role": null
+      }
+    },
+    {
+      "type": "StaticObject3D",
+      "data": {
+        "asset_type": "BlockoutPlatform"
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
+          50.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.5,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          50.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "Blockout Platform",
+        "role": null
+      }
+    },
+    {
+      "type": "StaticObject3D",
+      "data": {
+        "asset_type": "BlockoutPlatform"
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
+          5.0,
+          0.0,
+          0.0,
+          45.0,
+          0.0,
+          -4.371139e-8,
+          -2.5,
+          2.5,
+          0.0,
+          1.0,
+          -1.09278474e-7,
+          5.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "Blockout Platform",
+        "role": null
+      }
+    },
+    {
+      "type": "StaticObject3D",
+      "data": {
+        "asset_type": "BlockoutPlatform"
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
+          -1.09278474e-7,
+          1.0,
+          0.0,
+          40.047,
+          -2.5,
+          -4.371139e-8,
+          0.0,
+          2.5,
+          0.0,
+          0.0,
+          5.0,
+          8.0,
           0.0,
           0.0,
           0.0,
@@ -45,15 +197,15 @@
           1.0,
           0.0,
           0.0,
-          2.2012503,
+          37.813213,
           0.0,
           1.0,
           0.0,
-          0.0,
+          2.4166675,
           0.0,
           0.0,
           1.0,
-          -0.6736941,
+          0.7320601,
           0.0,
           0.0,
           0.0,
@@ -71,8 +223,84 @@
     {
       "type": "Camera",
       "data": {
-        "pitch": 0.22469321,
-        "yaw": -0.14389491
+        "pitch": -0.011035842,
+        "yaw": 26.134079
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
+          5.0,
+          0.0,
+          0.0,
+          45.0,
+          0.0,
+          -4.371139e-8,
+          -2.5,
+          2.5,
+          0.0,
+          1.0,
+          -1.09278474e-7,
+          -5.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "Blockout Platform",
+        "role": null
+      }
+    },
+    {
+      "type": "StaticObject3D",
+      "data": {
+        "asset_type": "BlockoutPlatform"
+      }
+    }
+  ],
+  [
+    {
+      "type": "Transform",
+      "data": {
+        "matrix": [
+          -2.1855694e-8,
+          1.0,
+          0.0,
+          40.047,
+          -0.5,
+          -4.371139e-8,
+          0.0,
+          4.5,
+          0.0,
+          0.0,
+          1.6,
+          1.5,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "type": "Metadata",
+      "data": {
+        "title": "Blockout Platform",
+        "role": null
+      }
+    },
+    {
+      "type": "StaticObject3D",
+      "data": {
+        "asset_type": "BlockoutPlatform"
       }
     }
   ]

@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::collections::HashMap;
 use std::any::TypeId;
 use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
-use crate::{ InterfaceState, LevelEditorUI, ComponentUI };
+use crate::{ copy_entity, delete_entity, ComponentUI, InterfaceState, LevelEditorUI };
 use crate::{ query_get_all, get_all_components_by_id };
 use crate::index::engine::components::{ Metadata, Transform };
 use crate::index::engine::components::camera::Camera;
@@ -15,8 +15,6 @@ use crate::index::engine::systems::serialization::try_save_world;
 
 pub struct InterfaceSystem {
     ui_handle: Weak<LevelEditorUI>,
-    selected_entity_id: Option<SharedString>,
-    hovered_evtity_id: Option<SharedString>,
 }
 
 // Component type mapping for dynamic lookup
@@ -64,8 +62,6 @@ impl InterfaceSystem {
 
         let system = Self {
             ui_handle,
-            selected_entity_id: None,
-            hovered_evtity_id: None,
         };
 
         // Set up callbacks
@@ -114,6 +110,28 @@ impl InterfaceSystem {
                 spawn_blockout_platform();
                 Self::update_entity_tree_global();
                 println!("🏗️ Spawned new blockout platform");
+            }
+        });
+
+        state.on_copy_entity({
+            move |entity_id| {
+                if let Some(new_entity_id) = copy_entity!(entity_id.to_string()) {
+                    println!("✅ Entity copied: {} -> {}", entity_id, new_entity_id);
+                    Self::update_entity_tree_global();
+                } else {
+                    println!("❌ Failed to copy entity: {}", entity_id);
+                }
+            }
+        });
+
+        state.on_delete_entity({
+            move |entity_id| {
+                if delete_entity!(entity_id.to_string()) {
+                    println!("✅ Entity deleted: {}", entity_id);
+                    Self::update_entity_tree_global();
+                } else {
+                    println!("❌ Failed to delete entity: {}", entity_id);
+                }
             }
         });
 

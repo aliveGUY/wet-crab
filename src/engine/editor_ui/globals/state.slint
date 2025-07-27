@@ -9,6 +9,8 @@ export global InterfaceState {
     in-out property <[ComponentUI]> components: [];
     callback component-changed(string /* entity_id */, string /* component_name */, ComponentUI /* updated_component */);
     callback entity-selected(string /* entity_id */);
+    callback copy-entity(string /* entity_id */);
+    callback delete-entity(string /* entity_id */);
     callback entity-deselected();
     callback save-scene();
     callback spawn-blockout-platform();

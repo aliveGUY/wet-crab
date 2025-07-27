@@ -1,7 +1,7 @@
 import { Colors } from "../globals/colors.slint";
 
-export component Button {
-    in property <string> text;
+export component IconButton {
+    in property <image> icon;
     callback on-click();
 
     TouchArea {
@@ -11,11 +11,10 @@ export component Button {
             background: parent.pressed ? Colors.button-background-pressed : (parent.has-hover ? Colors.button-background-hovered : Colors.button-background);
             VerticalLayout {
                 padding: 8px;
-                Text {
-                    horizontal-alignment: center;
-                    text: text;
-                    color: Colors.text-color;
-                    font-size: 16px;
+                Image {
+                    source: icon;
+                    width: 24px;
+                    height: 24px;
                 }
             }
         }

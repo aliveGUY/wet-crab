@@ -78,7 +78,7 @@ impl RenderSystem {
         };
         let fov = (90.0_f32).to_radians();
         let aspect_ratio = (width as f32) / (height as f32);
-        let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
+        let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 100.0);
         let view_proj = mat4x4_mul(projection_matrix, view_matrix);
 
         // Get selection state for outline rendering
