@@ -10,6 +10,8 @@ use crate::index::engine::components::camera::Camera;
 use crate::index::engine::components::static_object3d::StaticObject3D;
 use crate::index::engine::components::animated_object3d::AnimatedObject3D;
 use crate::index::engine::systems::entity_component_system::WORLD;
+use crate::index::game::entities::blockout_platform::spawn_blockout_platform;
+use crate::index::engine::systems::serialization::try_save_world;
 
 pub struct InterfaceSystem {
     ui_handle: Weak<LevelEditorUI>,
@@ -48,7 +50,11 @@ impl InterfaceSystem {
             WORLD.with(|w| {
                 let mut world = w.borrow_mut();
                 if world.apply_component_ui_by_type(&entity_id, &type_id, &updated_component) {
-                    println!("✅ Applied UI changes to {} component for entity {}", component_name, entity_id);
+                    println!(
+                        "✅ Applied UI changes to {} component for entity {}",
+                        component_name,
+                        entity_id
+                    );
                 } else {
                     println!("⚠️ No store found for component type: {}", component_name);
                 }
@@ -92,6 +98,27 @@ impl InterfaceSystem {
         state.on_entity_deselected({
             move || {
                 Self::handle_entity_deselected();
+            }
+        });
+
+        state.on_save_scene({
+            move || {
+                match try_save_world("src/assets/scenes/test_world.json") {
+                    Ok(()) => {
+                        println!("✅ ECS state saved to: src/assets/scenes/test_world.json");
+                    }
+                    Err(err) => {
+                        eprintln!("❌ Failed to save ECS state: {}", err);
+                    }
+                }
+            }
+        });
+
+        state.on_spawn_blockout_platform({
+            move || {
+                spawn_blockout_platform();
+                Self::update_entity_tree_global();
+                println!("🏗️ Spawned new blockout platform");
             }
         });
 

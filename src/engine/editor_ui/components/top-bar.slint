@@ -1,0 +1,25 @@
+import { Button } from "../common/button.slint";
+import { InterfaceState } from "../globals/state.slint";
+
+export component TopBar {
+    HorizontalLayout {
+        alignment: start;
+        spacing: 8px;
+        padding-top: 8px;
+        padding-left: 8px;
+        padding-right: 8px;
+        Button {
+            text: "Save Scene";
+            on-click => {
+                InterfaceState.save-scene()
+            }
+        }
+
+        Button {
+            text: "Spawn Blockout Platform";
+            on-click => {
+                InterfaceState.spawn-blockout-platform()
+            }
+        }
+    }
+}

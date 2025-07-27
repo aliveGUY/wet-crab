@@ -22,22 +22,11 @@ impl Program {
     pub fn new(gl: glow::Context) -> Result<Self, String> {
         initialize_asset_manager(&gl);
 
-        spawn_chair();
-        spawn_testing_doll();
-        spawn_player();
-        spawn_blockout_platform();
-
         EventSystem::subscribe(EventType::Move, Arc::new(MovementSystem));
         EventSystem::subscribe(EventType::RotateCamera, Arc::new(CameraRotationSystem));
 
         InterfaceSystem::update_entity_tree_global();
 
-        // Demonstrate ECS serialization functionality
-        println!("🔄 Testing ECS serialization with direct component data...");
-        save_world!("src/assets/scenes/test_world.json");
-
-        // Test loading functionality
-        println!("🔄 Testing world loading...");
         load_world!("src/assets/scenes/test_world.json");
 
         // Update UI to reflect loaded entities
