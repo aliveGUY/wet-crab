@@ -39,13 +39,6 @@ impl InterfaceSystem {
         component_name: String,
         updated_component: ComponentUI
     ) {
-        println!(
-            "🔄 Component changed: Entity={}, Component={}, Attributes={}",
-            entity_id,
-            component_name,
-            updated_component.attributes.row_count()
-        );
-
         // Dynamic component lookup using TypeId and StoreDyn - no more hardcoded match!
         if let Some(&type_id) = COMPONENT_TYPE_MAP.get(component_name.as_str()) {
             WORLD.with(|w| {
@@ -220,12 +213,7 @@ impl InterfaceSystem {
                 let state = ui.global::<InterfaceState>();
                 let selected = state.get_selected_index().to_string();
                 let hovered = state.get_hovered_entity_id().to_string();
-                
-                // Debug output to see what we're reading
-                if !hovered.is_empty() {
-                    println!("🔍 Interface state - Selected: '{}', Hovered: '{}'", selected, hovered);
-                }
-                
+
                 return (selected, hovered);
             }
         }

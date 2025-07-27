@@ -74,7 +74,7 @@ impl RenderSystem {
             };
 
             // Get view matrix while we have the camera reference
-            camera.get_view_matrix()
+            camera.get_view_matrix(player_id)
         };
         let fov = (90.0_f32).to_radians();
         let aspect_ratio = (width as f32) / (height as f32);
@@ -84,10 +84,6 @@ impl RenderSystem {
         // Get selection state for outline rendering
         let (selected_id, hovered_id) = Self::get_selection_state();
         
-        // Debug output for render system
-        if !hovered_id.is_empty() || !selected_id.is_empty() {
-            println!("🎨 Render system - Selected: '{}', Hovered: '{}'", selected_id, hovered_id);
-        }
 
         Self::render_animated_objects(gl, &view_proj, &selected_id, &hovered_id);
         Self::render_static_objects(gl, &view_proj, &selected_id, &hovered_id);
@@ -101,14 +97,11 @@ impl RenderSystem {
         query!((Transform, AnimatedObject3DComponent), |_id, transform, animated_object| {
             Self::setup_viewport_uniform(gl, view_proj, animated_object.material.shader_program);
             
-            // Use shader directly from material
             unsafe {
                 gl.use_program(Some(animated_object.material.shader_program));
             }
 
-            // Update animation
             {
-                // Convert to the types expected by the animator
                 let animation_channels: Vec<crate::index::engine::components::AnimatedObject3D::AnimationChannel> =
                     animated_object.animation_channels
                         .iter()
@@ -232,8 +225,6 @@ impl RenderSystem {
         query!((Transform, StaticObject3DComponent), |entity_id, transform, static_object| {
             // Check if this entity needs an outline
             if let Some(outline_color) = Self::get_outline_info(entity_id, selected_id, hovered_id) {
-                println!("🖼️ Rendering outline for entity '{}' with color {:?}", entity_id, outline_color);
-                // PASS 1: Render outline (backface culling + scaled mesh)
                 unsafe {
                     // Enable front-face culling for outline
                     gl.cull_face(glow::FRONT);

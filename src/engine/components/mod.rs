@@ -10,12 +10,14 @@ pub mod static_object3d;
 pub mod system;
 pub mod transform;
 pub mod metadata;
+pub mod velocity;
 
 // Re-export commonly used types for convenience
 pub use camera::Camera as CameraComponent;
 pub use system::SystemTrait;
 pub use transform::Transform;
 pub use metadata::Metadata;
+pub use velocity::Velocity;
 #[allow(dead_code)]
 pub type Material = self::material::Material;
 #[allow(dead_code)]
