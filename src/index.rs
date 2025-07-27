@@ -33,11 +33,15 @@ impl Program {
         InterfaceSystem::update_entity_tree_global();
 
         // Demonstrate ECS serialization functionality
-        println!("🔄 Testing ECS serialization...");
+        println!("🔄 Testing ECS serialization with direct component data...");
         save_world!("src/assets/scenes/test_world.json");
 
-        // You can uncomment the line below to test loading:
-        // load_world!("test_world.json");
+        // Test loading functionality
+        println!("🔄 Testing world loading...");
+        load_world!("src/assets/scenes/test_world.json");
+
+        // Update UI to reflect loaded entities
+        InterfaceSystem::update_entity_tree_global();
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);

@@ -6,6 +6,7 @@ use slint::{ VecModel, ModelRc };
 use std::sync::RwLock;
 use std::rc::Rc;
 use std::cell::RefCell;
+use serde::{ Serialize, Deserialize };
 
 #[derive(Debug)]
 pub struct Camera {
@@ -16,6 +17,21 @@ pub struct Camera {
     roll: RwLock<f32>,
     transform_dirty: RwLock<bool>,
     component_ui: Rc<RefCell<ComponentUI>>, // Single-threaded shared UI
+}
+
+// Custom serialization for Camera since RwLock can't be serialized
+impl Serialize for Camera {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Camera", 3)?;
+        state.serialize_field("position", &*self.position.read().unwrap())?;
+        state.serialize_field("pitch", &*self.pitch.read().unwrap())?;
+        state.serialize_field("yaw", &*self.yaw.read().unwrap())?;
+        state.end()
+    }
 }
 
 impl Camera {
@@ -297,5 +313,78 @@ impl Component for Camera {
 
     fn get_component_ui(&self) -> Rc<RefCell<ComponentUI>> {
         self.component_ui.clone()
+    }
+}
+
+// Custom deserialization for Camera since RwLock can't be deserialized
+impl<'de> Deserialize<'de> for Camera {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Deserializer, MapAccess, Visitor};
+        use std::fmt;
+
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field { Position, Pitch, Yaw }
+
+        struct CameraVisitor;
+
+        impl<'de> Visitor<'de> for CameraVisitor {
+            type Value = Camera;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Camera")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Camera, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut position = None;
+                let mut pitch = None;
+                let mut yaw = None;
+                
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Position => {
+                            if position.is_some() {
+                                return Err(de::Error::duplicate_field("position"));
+                            }
+                            position = Some(map.next_value()?);
+                        }
+                        Field::Pitch => {
+                            if pitch.is_some() {
+                                return Err(de::Error::duplicate_field("pitch"));
+                            }
+                            pitch = Some(map.next_value()?);
+                        }
+                        Field::Yaw => {
+                            if yaw.is_some() {
+                                return Err(de::Error::duplicate_field("yaw"));
+                            }
+                            yaw = Some(map.next_value()?);
+                        }
+                    }
+                }
+                
+                let position = position.ok_or_else(|| de::Error::missing_field("position"))?;
+                let pitch = pitch.ok_or_else(|| de::Error::missing_field("pitch"))?;
+                let yaw = yaw.ok_or_else(|| de::Error::missing_field("yaw"))?;
+                
+                // Create camera and set values
+                let camera = Camera::new();
+                *camera.position.write().unwrap() = position;
+                *camera.pitch.write().unwrap() = pitch;
+                *camera.yaw.write().unwrap() = yaw;
+                *camera.transform_dirty.write().unwrap() = true;
+                
+                Ok(camera)
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["position", "pitch", "yaw"];
+        deserializer.deserialize_struct("Camera", FIELDS, CameraVisitor)
     }
 }

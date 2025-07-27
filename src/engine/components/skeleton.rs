@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Node {
     pub translation: [f32; 3],
     pub rotation: [f32; 4],
@@ -6,7 +6,7 @@ pub struct Node {
     pub parent: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Skeleton {
     pub nodes: Vec<Node>,
     pub joint_ids: Vec<u32>,

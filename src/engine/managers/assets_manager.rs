@@ -7,7 +7,7 @@ use crate::index::engine::components::{ StaticObject3DComponent, AnimatedObject3
 use crate::index::engine::components::SharedComponents::{ Transform };
 use crate::index::engine::utils::gltf_loader_utils::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Assets {
     TestingDoll,
     Chair,
@@ -151,7 +151,7 @@ impl AssetsManager {
         let mut transform = Transform::new(0.0, 0.0, 0.0);
         transform.translate(0.0, 0.0, 0.0); // Default position
 
-        let static_object = StaticObject3DComponent::new(mesh, material);
+        let static_object = StaticObject3DComponent::new(mesh, material, asset_name);
 
         // Store in static assets map
         self.static_assets.insert(asset_name, static_object);
@@ -197,7 +197,8 @@ impl AssetsManager {
             mesh,
             material,
             skeleton,
-            animation_channels
+            animation_channels,
+            asset_name
         );
 
         // Store in animated assets map

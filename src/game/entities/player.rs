@@ -8,7 +8,7 @@ pub fn spawn_player() -> EntityId {
     crate::insert_many!(
         player_entity_id.clone(),
         CameraComponent::new(),
-        Metadata::new("Player Camera")
+        Metadata::new_with_role("Player Camera", Some("player"))
     );
     player_entity_id
 }
