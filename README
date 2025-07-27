@@ -1,12 +1,3 @@
-Прежде чем поднять dev сервер нужно установить symlink pkg в папку build/dev/ 
-# Linux
-```bash
-cd build/dev
-ln -s ../../pkg pkg
-```
+# <center>Untitled project</center>
 
-# Windows
-```bash
-cd build/dev
-mklink /D pkg ..\..\pkg
-```
+### [Level design Link](https://www.figma.com/design/tMZ5sDeTs8ogcwn3GmZ1rm/Untitled?node-id=0-1&t=WOlvkKt9udDjh05k-1)
