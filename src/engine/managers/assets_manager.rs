@@ -19,6 +19,8 @@ pub struct AssetsManager {
     animated_assets: HashMap<Assets, AnimatedObject3DComponent>,
     static_shader_program: Option<glow::Program>,
     animated_shader_program: Option<glow::Program>,
+    static_outline_shader_program: Option<glow::Program>,
+    animated_outline_shader_program: Option<glow::Program>,
     initialized: bool,
 }
 
@@ -29,6 +31,8 @@ impl AssetsManager {
             animated_assets: HashMap::new(),
             static_shader_program: None,
             animated_shader_program: None,
+            static_outline_shader_program: None,
+            animated_outline_shader_program: None,
             initialized: false,
         }
     }
@@ -55,8 +59,24 @@ impl AssetsManager {
             "animated"
         );
 
+        // Create outline shader programs
+        let static_outline_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_outline_static.glsl"),
+            include_str!("../../assets/shaders/fragment_outline.glsl"),
+            "static_outline"
+        );
+        let animated_outline_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_outline_animated.glsl"),
+            include_str!("../../assets/shaders/fragment_outline.glsl"),
+            "animated_outline"
+        );
+
         self.static_shader_program = Some(static_shader);
         self.animated_shader_program = Some(animated_shader);
+        self.static_outline_shader_program = Some(static_outline_shader);
+        self.animated_outline_shader_program = Some(animated_outline_shader);
 
         // Load animated asset (TestingDoll)
         self.load_animated_gltf(
@@ -282,4 +302,18 @@ pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3DComponent {
 
 pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3DComponent {
     ASSETS_MANAGER.with(|manager| { manager.borrow().get_animated_object_copy(asset_name) })
+}
+
+pub fn get_static_outline_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().static_outline_shader_program
+            .expect("Static outline shader not initialized")
+    })
+}
+
+pub fn get_animated_outline_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().animated_outline_shader_program
+            .expect("Animated outline shader not initialized")
+    })
 }

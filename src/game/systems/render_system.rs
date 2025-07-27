@@ -5,12 +5,31 @@ use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3D
 use crate::index::engine::components::SharedComponents::Transform;
 use crate::index::engine::components::AnimatedObject3D::AnimationType;
 use crate::index::engine::utils::{mat4x4_perspective, mat4x4_mul, mat4x4_identity, node_world_txfm};
+use crate::index::engine::managers::assets_manager::{get_static_outline_shader, get_animated_outline_shader};
+use crate::index::engine::systems::interface_system::InterfaceSystem;
 use crate::index::PLAYER_ENTITY_ID;
 
 #[derive(Debug)]
 pub struct RenderSystem;
 
 impl RenderSystem {
+    /// Get selection state from interface
+    fn get_selection_state() -> (String, String) {
+        // Read the actual selection and hover state from the interface system
+        InterfaceSystem::get_selection_state()
+    }
+
+    /// Determine outline color based on selection state
+    fn get_outline_info(entity_id: &str, selected_id: &str, hovered_id: &str) -> Option<[f32; 3]> {
+        if entity_id == selected_id && !selected_id.is_empty() {
+            Some([1.0, 1.0, 0.0]) // Yellow for selected
+        } else if entity_id == hovered_id && !hovered_id.is_empty() {
+            Some([1.0, 1.0, 1.0]) // White for hovered
+        } else {
+            None // No outline
+        }
+    }
+
     pub fn update(gl: &glow::Context, width: u32, height: u32) {
         unsafe {
             // Set viewport for current frame
@@ -62,15 +81,23 @@ impl RenderSystem {
         let projection_matrix = mat4x4_perspective(fov, aspect_ratio, 0.1, 10.0);
         let view_proj = mat4x4_mul(projection_matrix, view_matrix);
 
-        Self::render_animated_objects(gl, &view_proj);
-        Self::render_static_objects(gl, &view_proj);
+        // Get selection state for outline rendering
+        let (selected_id, hovered_id) = Self::get_selection_state();
+        
+        // Debug output for render system
+        if !hovered_id.is_empty() || !selected_id.is_empty() {
+            println!("🎨 Render system - Selected: '{}', Hovered: '{}'", selected_id, hovered_id);
+        }
+
+        Self::render_animated_objects(gl, &view_proj, &selected_id, &hovered_id);
+        Self::render_static_objects(gl, &view_proj, &selected_id, &hovered_id);
 
         unsafe {
             gl.bind_vertex_array(None);
         }
     }
 
-    fn render_animated_objects(gl: &glow::Context, view_proj: &[f32; 16]) {
+    fn render_animated_objects(gl: &glow::Context, view_proj: &[f32; 16], selected_id: &str, hovered_id: &str) {
         query!((Transform, AnimatedObject3DComponent), |_id, transform, animated_object| {
             Self::setup_viewport_uniform(gl, view_proj, animated_object.material.shader_program);
             
@@ -201,11 +228,54 @@ impl RenderSystem {
         });
     }
 
-    fn render_static_objects(gl: &glow::Context, view_proj: &[f32; 16]) {
-        query!((Transform, StaticObject3DComponent), |_id, transform, static_object| {
+    fn render_static_objects(gl: &glow::Context, view_proj: &[f32; 16], selected_id: &str, hovered_id: &str) {
+        query!((Transform, StaticObject3DComponent), |entity_id, transform, static_object| {
+            // Check if this entity needs an outline
+            if let Some(outline_color) = Self::get_outline_info(entity_id, selected_id, hovered_id) {
+                println!("🖼️ Rendering outline for entity '{}' with color {:?}", entity_id, outline_color);
+                // PASS 1: Render outline (backface culling + scaled mesh)
+                unsafe {
+                    // Enable front-face culling for outline
+                    gl.cull_face(glow::FRONT);
+                    
+                    // Use outline shader
+                    let outline_shader = get_static_outline_shader();
+                    gl.use_program(Some(outline_shader));
+                    
+                    // Set up uniforms for outline
+                    Self::setup_viewport_uniform(gl, view_proj, outline_shader);
+                    
+                    let world_txfm = transform.get_matrix();
+                    gl.bind_vertex_array(Some(static_object.mesh.vao));
+                    
+                    // Upload uniforms
+                    if let Some(loc) = gl.get_uniform_location(outline_shader, "world_txfm") {
+                        gl.uniform_matrix_4_f32_slice(Some(&loc), true, world_txfm);
+                    }
+                    if let Some(loc) = gl.get_uniform_location(outline_shader, "outline_scale") {
+                        gl.uniform_1_f32(Some(&loc), 1.05); // Scale up by 5%
+                    }
+                    if let Some(loc) = gl.get_uniform_location(outline_shader, "outline_color") {
+                        gl.uniform_3_f32_slice(Some(&loc), &outline_color);
+                    }
+                    
+                    // Draw outline
+                    gl.draw_elements(
+                        glow::TRIANGLES,
+                        static_object.mesh.index_count as i32,
+                        glow::UNSIGNED_SHORT,
+                        0
+                    );
+                    
+                    // Reset to back-face culling for normal rendering
+                    gl.cull_face(glow::BACK);
+                }
+            }
+            
+            // PASS 2: Render normal object
             Self::setup_viewport_uniform(gl, view_proj, static_object.material.shader_program);
             
-            // Use shader directly from material
+            // Use normal shader
             unsafe {
                 gl.use_program(Some(static_object.material.shader_program));
             }
@@ -224,7 +294,7 @@ impl RenderSystem {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), true, world_txfm);
                 }
 
-                // Draw the mesh (simple static rendering)
+                // Draw the mesh (normal rendering)
                 gl.draw_elements(
                     glow::TRIANGLES,
                     static_object.mesh.index_count as i32,

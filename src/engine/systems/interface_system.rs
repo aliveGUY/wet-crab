@@ -15,7 +15,8 @@ use crate::index::engine::systems::serialization::try_save_world;
 
 pub struct InterfaceSystem {
     ui_handle: Weak<LevelEditorUI>,
-    selected_entity_id: Option<String>,
+    selected_entity_id: Option<SharedString>,
+    hovered_evtity_id: Option<SharedString>,
 }
 
 // Component type mapping for dynamic lookup
@@ -71,6 +72,7 @@ impl InterfaceSystem {
         let system = Self {
             ui_handle,
             selected_entity_id: None,
+            hovered_evtity_id: None,
         };
 
         // Set up callbacks
@@ -196,27 +198,6 @@ impl InterfaceSystem {
         println!("Updated entity tree with {} entities", entity_count);
     }
 
-    /// Set the selected entity
-    pub fn set_selected_entity(&mut self, entity_id: Option<String>) {
-        self.selected_entity_id = entity_id.clone();
-
-        let ui = match self.ui_handle.upgrade() {
-            Some(ui) => ui,
-            None => {
-                return;
-            }
-        };
-
-        let state = ui.global::<InterfaceState>();
-        let selection = entity_id.unwrap_or_default();
-        state.set_selected_index(SharedString::from(selection));
-    }
-
-    /// Get the currently selected entity ID
-    pub fn get_selected_entity(&self) -> Option<&String> {
-        self.selected_entity_id.as_ref()
-    }
-
     // Static methods for backward compatibility with existing code
 
     /// Initialize the global InterfaceSystem instance (replaces old initialize method)
@@ -232,10 +213,22 @@ impl InterfaceSystem {
         }
     }
 
-    /// Set the selected entity using the global instance
-    pub fn set_selected_element(entity_id: &str) {
-        if let Some(ref mut system) = INTERFACE_SYSTEM.lock().unwrap().as_mut() {
-            system.set_selected_entity(Some(entity_id.to_string()));
+    /// Get the current selection and hover state from the interface
+    pub fn get_selection_state() -> (String, String) {
+        if let Some(ref system) = INTERFACE_SYSTEM.lock().unwrap().as_ref() {
+            if let Some(ui) = system.ui_handle.upgrade() {
+                let state = ui.global::<InterfaceState>();
+                let selected = state.get_selected_index().to_string();
+                let hovered = state.get_hovered_entity_id().to_string();
+                
+                // Debug output to see what we're reading
+                if !hovered.is_empty() {
+                    println!("🔍 Interface state - Selected: '{}', Hovered: '{}'", selected, hovered);
+                }
+                
+                return (selected, hovered);
+            }
         }
+        ("".to_string(), "".to_string())
     }
 }
