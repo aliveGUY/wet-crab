@@ -1,0 +1,28 @@
+import { Colors } from "../globals/colors.slint";
+import { InterfaceState } from "../globals/state.slint";
+
+export component Button {
+    in property <string> text;
+    callback on-click();
+
+    TouchArea {
+        mouse-cursor: pointer;
+        Rectangle {
+            border-radius: 6px;
+            background: parent.pressed ? Colors.button-background-pressed : (parent.has-hover ? Colors.button-background-hovered : Colors.button-background);
+            VerticalLayout {
+                padding: 8px;
+                Text {
+                    horizontal-alignment: center;
+                    text: text;
+                    color: Colors.text-color;
+                    font-size: 16px;
+                }
+            }
+        }
+
+        clicked => {
+            on-click()
+        }
+    }
+}

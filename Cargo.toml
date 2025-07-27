@@ -13,6 +13,8 @@ tokio = { version = "1", features = ["full"] }
 glow = "0.16.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 dashmap = "5.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # Window management and OpenGL context
 winit = "0.30.0"

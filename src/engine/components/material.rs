@@ -56,3 +56,16 @@ impl Material {
         }
     }
 }
+
+impl Default for Material {
+    fn default() -> Self {
+        Self {
+            #[allow(invalid_value)]
+            shader_program: unsafe { std::mem::MaybeUninit::zeroed().assume_init() },
+            base_color_texture: None,
+            metallic_factor: 0.0,
+            roughness_factor: 0.5,
+            double_sided: false,
+        }
+    }
+}

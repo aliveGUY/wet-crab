@@ -4,10 +4,12 @@ export global InterfaceState {
     in-out property <string> selected-index: "";
     in-out property <string> selected-title: "";
     in-out property <string> selected-components;
+    in-out property <string> hovered-entity-id: "";
     in-out property <[{entity_id: string, title: string}]> entities: [];
     in-out property <[ComponentUI]> components: [];
-    
     callback component-changed(string /* entity_id */, string /* component_name */, ComponentUI /* updated_component */);
     callback entity-selected(string /* entity_id */);
     callback entity-deselected();
+    callback save-scene();
+    callback spawn-blockout-platform();
 }

@@ -3,63 +3,55 @@ import { InterfaceState } from "../globals/state.slint";
 import { Panel } from "../common/panel.slint";
 import { EntityListItem } from "../components/entity-list-item.slint";
 import { ComponentListItem } from "../components/component-list-item.slint";
+import { Button } from "../common/button.slint";
+import { TopBar } from "../components/top-bar.slint";
 
 export component LevelEditorUI inherits Window {
     min-width: 800px;
     min-height: 600px;
     background: transparent;
 
-    HorizontalLayout {
-        width: 100%;
-        spacing: 10px;
-        padding: 15px;
-        alignment: space-between;
+    VerticalLayout {
+        TopBar { }
 
-        Panel {
-            height: 100%;
-            width: 300px;
+        HorizontalLayout {
+            width: 100%;
+            spacing: 10px;
+            padding: 15px;
+            alignment: space-between;
 
-            for entity in InterfaceState.entities: EntityListItem {
-                title: entity.title;
-                entity-id: entity.entity_id;
+            Panel {
+                width: 300px;
+
+                for entity in InterfaceState.entities: EntityListItem {
+                    title: entity.title;
+                    entity-id: entity.entity_id;
+                }
             }
-        }
 
-        if InterfaceState.selected-index != "":Panel {
-            height: 100%;
-            width: 300px;
+            if InterfaceState.selected-index != "":Panel {
+                width: 300px;
 
-            TouchArea {
-                height: 20px;
-                mouse-cursor: pointer;
-                Rectangle {
-                    border-radius: 6px;
-                    background: Colors.button-background;
-
-                    Text {
-                        text: "Close";
-                        color: Colors.text-color;
-                        font-size: 16px;
+                Button {
+                    text: "Close";
+                    on-click => {
+                        InterfaceState.selected-index = "";
+                        InterfaceState.entity-deselected();
                     }
                 }
 
-                clicked => {
-                    InterfaceState.selected-index = "";
-                    InterfaceState.entity-deselected();
+                Text {
+                    width: 100%;
+                    horizontal-alignment: center;
+                    text: InterfaceState.selected-title;
+                    font-size: 24px;
+                    color: Colors.card-background-selected;
                 }
-            }
 
-            Text {
-                width: 100%;
-                horizontal-alignment: center;
-                text: InterfaceState.selected-title;
-                font-size: 24px;
-                color: Colors.card-background-selected;
-            }
-
-            for component in InterfaceState.components: ComponentListItem {
-                component: component;
-                entity-id: InterfaceState.selected-index;
+                for component in InterfaceState.components: ComponentListItem {
+                    component: component;
+                    entity-id: InterfaceState.selected-index;
+                }
             }
         }
     }

@@ -13,12 +13,74 @@ use crate::{
 use slint::{ VecModel, ModelRc };
 use std::rc::Rc;
 use std::cell::RefCell;
+use serde::{Serialize, Deserialize};
 
 // Transform component for 3D objects - simplified matrix-based approach
-#[derive(Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Transform {
     matrix: Mat4x4,
+    #[serde(skip)]
     component_ui: Rc<RefCell<ComponentUI>>, // Single-threaded shared UI
+}
+
+// Custom deserialization to properly initialize component UI
+impl<'de> Deserialize<'de> for Transform {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Deserializer, MapAccess, Visitor};
+        use std::fmt;
+
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field { Matrix }
+
+        struct TransformVisitor;
+
+        impl<'de> Visitor<'de> for TransformVisitor {
+            type Value = Transform;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Transform")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Transform, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut matrix = None;
+                
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Matrix => {
+                            if matrix.is_some() {
+                                return Err(de::Error::duplicate_field("matrix"));
+                            }
+                            matrix = Some(map.next_value()?);
+                        }
+                    }
+                }
+                
+                let matrix = matrix.ok_or_else(|| de::Error::missing_field("matrix"))?;
+                
+                // Extract position from matrix to create properly initialized component
+                use crate::index::engine::utils::math::mat4x4_extract_translation;
+                let translation = mat4x4_extract_translation(&matrix);
+                
+                // Create new component with proper UI initialization
+                let mut transform = Transform::new(translation[0], translation[1], translation[2]);
+                
+                // Set the actual matrix from deserialized data
+                transform.matrix = matrix;
+                
+                Ok(transform)
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["matrix"];
+        deserializer.deserialize_struct("Transform", FIELDS, TransformVisitor)
+    }
 }
 
 impl Transform {
@@ -35,7 +97,7 @@ impl Transform {
             AttributeUI {
                 name: "y position".into(),
                 dt_type: "FLOAT".into(),
-                value: "0.0".into(),
+                value: format!("{:.3}", y).into(),
             },
             AttributeUI {
                 name: "z position".into(),

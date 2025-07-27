@@ -1,8 +1,6 @@
 /target
 
-*lock*
-
+Cargo.lock
 /pkg
 
 build/dev/pkg
-src/lib.rs

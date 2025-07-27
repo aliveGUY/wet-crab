@@ -1,7 +1,7 @@
 use crate::index::engine::components::AnimatedObject3D::{Skeleton, AnimationChannel, AnimationType};
 use crate::index::engine::utils::math::lerp;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Animator {
     time_since_start: f32,
     animation_speed: f32, // FPS - default 30.0

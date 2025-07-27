@@ -7,10 +7,11 @@ use crate::index::engine::components::{ StaticObject3DComponent, AnimatedObject3
 use crate::index::engine::components::SharedComponents::{ Transform };
 use crate::index::engine::utils::gltf_loader_utils::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Assets {
     TestingDoll,
     Chair,
+    BlockoutPlatform,
 }
 
 pub struct AssetsManager {
@@ -18,6 +19,8 @@ pub struct AssetsManager {
     animated_assets: HashMap<Assets, AnimatedObject3DComponent>,
     static_shader_program: Option<glow::Program>,
     animated_shader_program: Option<glow::Program>,
+    static_outline_shader_program: Option<glow::Program>,
+    animated_outline_shader_program: Option<glow::Program>,
     initialized: bool,
 }
 
@@ -28,6 +31,8 @@ impl AssetsManager {
             animated_assets: HashMap::new(),
             static_shader_program: None,
             animated_shader_program: None,
+            static_outline_shader_program: None,
+            animated_outline_shader_program: None,
             initialized: false,
         }
     }
@@ -54,8 +59,24 @@ impl AssetsManager {
             "animated"
         );
 
+        // Create outline shader programs
+        let static_outline_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_outline_static.glsl"),
+            include_str!("../../assets/shaders/fragment_outline.glsl"),
+            "static_outline"
+        );
+        let animated_outline_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_outline_animated.glsl"),
+            include_str!("../../assets/shaders/fragment_outline.glsl"),
+            "animated_outline"
+        );
+
         self.static_shader_program = Some(static_shader);
         self.animated_shader_program = Some(animated_shader);
+        self.static_outline_shader_program = Some(static_outline_shader);
+        self.animated_outline_shader_program = Some(animated_outline_shader);
 
         // Load animated asset (TestingDoll)
         self.load_animated_gltf(
@@ -73,6 +94,15 @@ impl AssetsManager {
             include_bytes!("../../assets/meshes/chair.bin"),
             include_bytes!("../../assets/textures/wood-texture.png"),
             Assets::Chair,
+            static_shader,
+            gl
+        );
+
+        self.load_static_gltf(
+            include_str!("../../assets/meshes/blockout_platform.gltf"),
+            include_bytes!("../../assets/meshes/blockout_platform.bin"),
+            include_bytes!("../../assets/textures/orange-blueprint.png"),
+            Assets::BlockoutPlatform,
             static_shader,
             gl
         );
@@ -141,7 +171,7 @@ impl AssetsManager {
         let mut transform = Transform::new(0.0, 0.0, 0.0);
         transform.translate(0.0, 0.0, 0.0); // Default position
 
-        let static_object = StaticObject3DComponent::new(mesh, material);
+        let static_object = StaticObject3DComponent::new(mesh, material, asset_name);
 
         // Store in static assets map
         self.static_assets.insert(asset_name, static_object);
@@ -187,7 +217,8 @@ impl AssetsManager {
             mesh,
             material,
             skeleton,
-            animation_channels
+            animation_channels,
+            asset_name
         );
 
         // Store in animated assets map
@@ -262,19 +293,27 @@ thread_local! {
 
 // Public API
 pub fn initialize_asset_manager(gl: &glow::Context) {
-    ASSETS_MANAGER.with(|manager| {
-        manager.borrow_mut().initialize_asset_manager(gl)
-    })
+    ASSETS_MANAGER.with(|manager| { manager.borrow_mut().initialize_asset_manager(gl) })
 }
 
 pub fn get_static_object_copy(asset_name: Assets) -> StaticObject3DComponent {
-    ASSETS_MANAGER.with(|manager| {
-        manager.borrow().get_static_object_copy(asset_name)
-    })
+    ASSETS_MANAGER.with(|manager| { manager.borrow().get_static_object_copy(asset_name) })
 }
 
 pub fn get_animated_object_copy(asset_name: Assets) -> AnimatedObject3DComponent {
+    ASSETS_MANAGER.with(|manager| { manager.borrow().get_animated_object_copy(asset_name) })
+}
+
+pub fn get_static_outline_shader() -> glow::Program {
     ASSETS_MANAGER.with(|manager| {
-        manager.borrow().get_animated_object_copy(asset_name)
+        manager.borrow().static_outline_shader_program
+            .expect("Static outline shader not initialized")
+    })
+}
+
+pub fn get_animated_outline_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().animated_outline_shader_program
+            .expect("Animated outline shader not initialized")
     })
 }
