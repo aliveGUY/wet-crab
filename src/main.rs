@@ -472,10 +472,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up UI callbacks
     println!("[DEBUG] Setting up UI callbacks...");
 
-    // Set up continuous animation and UI updates with continuous movement dispatch
-    println!("[DEBUG] Setting up animation timer with UI updates and continuous movement...");
+    // Set up continuous animation and UI updates with smart movement dispatch
+    println!("[DEBUG] Setting up animation timer with UI updates and smart movement dispatch...");
     let animation_timer = slint::Timer::default();
     let desktop_handler_for_timer = desktop_handler.clone();
+    
+    // Movement state tracking to avoid unnecessary event dispatching
+    let last_movement_direction = Rc::new(RefCell::new(String::new()));
+    let last_movement_for_timer = last_movement_direction.clone();
 
     animation_timer.start(
         slint::TimerMode::Repeated,
@@ -487,26 +491,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 app.window().request_redraw();
             }
 
-            // Continuous movement dispatch: check pressed keys and calculate direction dynamically
+            // Smart movement dispatch: only dispatch when movement state changes
             let pressed_keys = desktop_handler_for_timer.borrow().get_pressed_keys();
             let w = pressed_keys.contains(&winit::keyboard::KeyCode::KeyW);
             let a = pressed_keys.contains(&winit::keyboard::KeyCode::KeyA);
             let s = pressed_keys.contains(&winit::keyboard::KeyCode::KeyS);
             let d = pressed_keys.contains(&winit::keyboard::KeyCode::KeyD);
 
-            // Only dispatch if any WASD keys are pressed
-            if w || a || s || d {
-                let direction =
-                    crate::index::engine::utils::input_utils::calculate_movement_direction(
-                        w,
-                        a,
-                        s,
-                        d
-                    );
-                // Create movement event directly and dispatch it
+            // Calculate current movement direction
+            let current_direction = if w || a || s || d {
+                crate::index::engine::utils::input_utils::calculate_movement_direction(w, a, s, d)
+            } else {
+                String::new() // Empty string for no movement
+            };
+
+            // Only dispatch movement event if direction changed
+            let mut last_direction = last_movement_for_timer.borrow_mut();
+            if current_direction != *last_direction {
+                *last_direction = current_direction.clone();
+                
+                // Create movement event and dispatch it
                 let move_event = crate::index::engine::systems::event_system::Event {
                     event_type: crate::index::engine::systems::event_system::EventType::Move,
-                    payload: Box::new(direction),
+                    payload: Box::new(current_direction),
                 };
                 crate::index::engine::systems::event_system::EventSystem::notify(move_event);
             }

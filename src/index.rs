@@ -55,7 +55,8 @@ impl Program {
         Ok(Self { gl })
     }
 
-    pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) {
+    pub fn render(&mut self, width: u32, height: u32, delta_time: f32) {
+        // Render the frame
         RenderSystem::update(&self.gl, width, height);
     }
 

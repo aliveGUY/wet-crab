@@ -12,6 +12,10 @@ pub trait StoreDyn: Any {
 
     fn apply_component_ui(&mut self, id: &EntityId, ui_data: &crate::ComponentUI);
 
+    fn remove_component(&mut self, id: &EntityId) -> bool;
+
+    fn clone_component(&mut self, source_id: &EntityId, target_id: &EntityId) -> bool;
+
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
@@ -80,6 +84,20 @@ impl<T: Component + Clone + 'static> StoreDyn for Store<T> {
         // If this entity has a T component, apply the UI changes to it
         if let Some(component) = self.0.get_mut(id) {
             component.apply_ui(ui_data);
+        }
+    }
+
+    fn remove_component(&mut self, id: &EntityId) -> bool {
+        self.0.remove(id).is_some()
+    }
+
+    fn clone_component(&mut self, source_id: &EntityId, target_id: &EntityId) -> bool {
+        if let Some(source_component) = self.0.get(source_id) {
+            let cloned_component = source_component.clone();
+            self.0.insert(target_id.clone(), cloned_component);
+            true
+        } else {
+            false
         }
     }
 
@@ -349,6 +367,43 @@ impl World {
     pub fn get_all_entities(&self) -> impl Iterator<Item = (&EntityId, &ComponentMask)> {
         self.meta.iter()
     }
+
+    /// Copy an entity with all its components to a new entity
+    pub fn copy_entity(&mut self, source_entity_id: &EntityId) -> Option<EntityId> {
+        // Check if source entity exists
+        let source_mask = self.meta.get(source_entity_id)?.clone();
+        
+        // Create new entity
+        let new_entity_id = self.spawn();
+        
+        // Copy components directly at ECS store level - NO UI INVOLVED
+        for store in self.stores.values_mut() {
+            store.clone_component(source_entity_id, &new_entity_id);
+        }
+        
+        // Set the component mask for new entity
+        self.meta.insert(new_entity_id.clone(), source_mask);
+        
+        Some(new_entity_id)
+    }
+
+    /// Delete an entity and all its components
+    pub fn delete_entity(&mut self, entity_id: &EntityId) -> bool {
+        // Check if entity exists
+        if !self.meta.contains_key(entity_id) {
+            return false;
+        }
+        
+        // Remove from component mask registry
+        self.meta.remove(entity_id);
+        
+        // Remove from all component stores
+        for store in self.stores.values_mut() {
+            store.remove_component(entity_id);
+        }
+        
+        true
+    }
 }
 
 // —————————————————————————————————————————— dynamic traits ————————
@@ -461,6 +516,32 @@ macro_rules! get_all_components_by_id {
             crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
                 let world = w.borrow();
                 world.get_all_components_ui_for_entity(&$eid)
+            })
+        }
+    };
+}
+
+// Copy entity macro - returns Option<EntityId>
+#[macro_export]
+macro_rules! copy_entity {
+    ($source_id:expr) => {
+        {
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let mut world = w.borrow_mut();
+                world.copy_entity(&$source_id)
+            })
+        }
+    };
+}
+
+// Delete entity macro - returns bool (success/failure)
+#[macro_export]
+macro_rules! delete_entity {
+    ($entity_id:expr) => {
+        {
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let mut world = w.borrow_mut();
+                world.delete_entity(&$entity_id)
             })
         }
     };

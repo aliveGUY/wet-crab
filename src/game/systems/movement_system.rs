@@ -1,7 +1,8 @@
 // Import types and functions from parent scope
-use crate::index::engine::components::{SystemTrait, CameraComponent};
+use crate::index::engine::components::{SystemTrait, CameraComponent, Transform};
 use crate::index::engine::systems::event_system::Event;
 use crate::index::engine::Component; // Import Component trait for update_component_ui
+use crate::index::engine::utils::math::{mat4x4_translate, mat4x4_mul};
 use crate::index::PLAYER_ENTITY_ID;
 
 #[derive(Debug)]
@@ -22,7 +23,7 @@ impl SystemTrait for CameraRotationSystem {
             None => return,
         };
 
-        query_by_id!(player_entity_id, (CameraComponent), |camera| {
+        crate::query_by_id!(player_entity_id, (CameraComponent), |camera| {
             camera.add_rotation_delta(pitch_delta, yaw_delta);
             camera.update_component_ui(&player_entity_id); // Update UI after component change
         });
@@ -73,32 +74,104 @@ impl SystemTrait for MovementSystem {
             down = false;
         }
 
-        const STEP: f32 = 0.1;
+        // Direct movement - apply movement immediately to transform
 
-        query_by_id!(player_entity_id, (CameraComponent), |camera| {
-            // Handle horizontal movement (existing logic)
-            match (fwd, back, left, right) {
-                (true, false, false, false) => camera.move_forward(STEP),
-                (false, true, false, false) => camera.move_back(STEP),
-                (false, false, false, true) => camera.move_right(STEP),
-                (false, false, true, false) => camera.move_left(STEP),
-
-                (true, false, true, false) => camera.move_forward_left(STEP),
-                (true, false, false, true) => camera.move_forward_right(STEP),
-                (false, true, true, false) => camera.move_back_left(STEP),
-                (false, true, false, true) => camera.move_back_right(STEP),
-
-                _ => {}
-            }
-            
-            // Handle vertical movement (new logic)
-            match (up, down) {
-                (true, false) => camera.move_up(STEP),
-                (false, true) => camera.move_down(STEP),
-                _ => {}
-            }
-            
-            camera.update_component_ui(&player_entity_id); // Update UI after component change
-        });
+        // Only move if any movement keys are pressed
+        if fwd || back || left || right || up || down {
+            // Get camera basis vectors and apply direct movement
+            crate::query_by_id!(player_entity_id, (CameraComponent, Transform), |camera, transform| {
+                // Get camera basis vectors for movement calculation
+                let (forward_vec, right_vec, up_vec) = camera.get_basis_vectors();
+                
+                // Calculate movement direction vector
+                let mut movement_direction = [0.0, 0.0, 0.0];
+                
+                // Handle horizontal movement
+                match (fwd, back, left, right) {
+                    (true, false, false, false) => {
+                        movement_direction[0] += -forward_vec[0];
+                        movement_direction[1] += -forward_vec[1];
+                        movement_direction[2] += -forward_vec[2];
+                    },
+                    (false, true, false, false) => {
+                        movement_direction[0] += forward_vec[0];
+                        movement_direction[1] += forward_vec[1];
+                        movement_direction[2] += forward_vec[2];
+                    },
+                    (false, false, false, true) => {
+                        movement_direction[0] += right_vec[0];
+                        movement_direction[1] += right_vec[1];
+                        movement_direction[2] += right_vec[2];
+                    },
+                    (false, false, true, false) => {
+                        movement_direction[0] += -right_vec[0];
+                        movement_direction[1] += -right_vec[1];
+                        movement_direction[2] += -right_vec[2];
+                    },
+                    (true, false, true, false) => {
+                        let s = 0.70710677; // sqrt(2)/2 for diagonal movement
+                        movement_direction[0] += (-forward_vec[0] - right_vec[0]) * s;
+                        movement_direction[1] += (-forward_vec[1] - right_vec[1]) * s;
+                        movement_direction[2] += (-forward_vec[2] - right_vec[2]) * s;
+                    },
+                    (true, false, false, true) => {
+                        let s = 0.70710677;
+                        movement_direction[0] += (-forward_vec[0] + right_vec[0]) * s;
+                        movement_direction[1] += (-forward_vec[1] + right_vec[1]) * s;
+                        movement_direction[2] += (-forward_vec[2] + right_vec[2]) * s;
+                    },
+                    (false, true, true, false) => {
+                        let s = 0.70710677;
+                        movement_direction[0] += (forward_vec[0] - right_vec[0]) * s;
+                        movement_direction[1] += (forward_vec[1] - right_vec[1]) * s;
+                        movement_direction[2] += (forward_vec[2] - right_vec[2]) * s;
+                    },
+                    (false, true, false, true) => {
+                        let s = 0.70710677;
+                        movement_direction[0] += (forward_vec[0] + right_vec[0]) * s;
+                        movement_direction[1] += (forward_vec[1] + right_vec[1]) * s;
+                        movement_direction[2] += (forward_vec[2] + right_vec[2]) * s;
+                    },
+                    _ => {}
+                }
+                
+                // Handle vertical movement
+                match (up, down) {
+                    (true, false) => {
+                        movement_direction[0] += up_vec[0];
+                        movement_direction[1] += up_vec[1];
+                        movement_direction[2] += up_vec[2];
+                    },
+                    (false, true) => {
+                        movement_direction[0] += -up_vec[0];
+                        movement_direction[1] += -up_vec[1];
+                        movement_direction[2] += -up_vec[2];
+                    },
+                    _ => {}
+                }
+                
+                // Scale movement by speed and delta time (assuming 60fps for now)
+                let movement_speed = 5.0; // units per second
+                let delta_time = 1.0 / 60.0; // ~16ms frame time
+                let movement_distance = movement_speed * delta_time;
+                
+                movement_direction[0] *= movement_distance;
+                movement_direction[1] *= movement_distance;
+                movement_direction[2] *= movement_distance;
+                
+                // Apply movement directly to transform
+                let translation_matrix = mat4x4_translate(
+                    movement_direction[0], 
+                    movement_direction[1], 
+                    movement_direction[2]
+                );
+                let new_matrix = mat4x4_mul(translation_matrix, *transform.get_matrix());
+                *transform.get_matrix_mut() = new_matrix;
+                
+                // Update UI to reflect the new position
+                transform.update_component_ui(&player_entity_id);
+                camera.update_component_ui(&player_entity_id);
+            });
+        }
     }
 }
