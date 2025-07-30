@@ -56,11 +56,35 @@ impl Program {
     }
 
     pub fn render(&mut self, width: u32, height: u32, delta_time: f32) {
-        // Render the frame
-        RenderSystem::update(&self.gl, width, height);
-    }
+        let mut viewport = [0i32; 4];
+        let mut program = 0i32;
+        let mut depth_func = 0;
+        let mut writemask = 0i32;
+        unsafe {
+            self.gl.get_parameter_i32_slice(glow::VIEWPORT, &mut viewport);
+            self.gl.get_parameter_i32_slice(glow::CURRENT_PROGRAM, std::slice::from_mut(&mut program));
+            self.gl.get_parameter_i32_slice(glow::DEPTH_FUNC, std::slice::from_mut(&mut depth_func));
+            self.gl.get_parameter_i32_slice(glow::DEPTH_WRITEMASK, std::slice::from_mut(&mut writemask));
+            self.gl.enable(glow::DEPTH_TEST);
+            self.gl.depth_func(glow::LESS);
+            self.gl.depth_mask(true);
+            self.gl.enable(glow::CULL_FACE);
+            self.gl.cull_face(glow::BACK);
+            self.gl.front_face(glow::CCW);
+            self.gl.viewport(0, 0, width as i32, height as i32);
+        }
 
-    pub fn get_gl_context(&self) -> &glow::Context {
-        &self.gl
+        RenderSystem::update(&self.gl, width, height);
+
+        unsafe {
+            self.gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+            self.gl.disable(glow::DEPTH_TEST);
+            self.gl.depth_func(depth_func as u32);
+            self.gl.depth_mask(writemask != 0);
+            self.gl.disable(glow::CULL_FACE);
+            self.gl.disable(glow::BLEND);
+            // Note: Skipping program restoration as it requires proper OpenGL program handle management
+            self.gl.clear(glow::DEPTH_BUFFER_BIT);
+        }
     }
 }
