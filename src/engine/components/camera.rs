@@ -17,10 +17,7 @@ pub struct Camera {
 
 // Custom serialization for Camera since RwLock can't be serialized
 impl Serialize for Camera {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
         use serde::ser::SerializeStruct;
         let mut state = serializer.serialize_struct("Camera", 2)?;
         state.serialize_field("pitch", &*self.pitch.read().unwrap())?;
@@ -68,7 +65,7 @@ impl Camera {
 
         let pitch = *self.pitch.read().unwrap();
         let yaw = *self.yaw.read().unwrap();
-        
+
         build_view_matrix(position, pitch, yaw)
     }
 
@@ -116,7 +113,7 @@ impl Component for Camera {
     fn apply_ui(&mut self, component_ui: &ComponentUI) {
         // Apply UI changes back to the camera
         use slint::Model;
-        
+
         for i in 0..component_ui.attributes.row_count() {
             if let Some(attribute) = component_ui.attributes.row_data(i) {
                 match attribute.name.as_str() {
@@ -124,12 +121,12 @@ impl Component for Camera {
                         if let Ok(degrees) = attribute.value.parse::<f32>() {
                             *self.pitch.write().unwrap() = degrees.to_radians();
                         }
-                    },
+                    }
                     "yaw (degrees)" => {
                         if let Ok(degrees) = attribute.value.parse::<f32>() {
                             *self.yaw.write().unwrap() = degrees.to_radians();
                         }
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -139,11 +136,11 @@ impl Component for Camera {
     fn update_component_ui(&mut self, entity_id: &str) {
         // Update SharedStrings in the Rc<RefCell<ComponentUI>> with current component values
         let mut ui = self.component_ui.borrow_mut();
-        
+
         // Read actual values from the camera
         let pitch = *self.pitch.read().unwrap();
         let yaw = *self.yaw.read().unwrap();
-        
+
         // Convert radians to degrees for better UI display
         let pitch_degrees = pitch.to_degrees();
         let yaw_degrees = yaw.to_degrees();
@@ -153,15 +150,17 @@ impl Component for Camera {
         for i in 0..ui.attributes.row_count() {
             if let Some(mut attr) = ui.attributes.row_data(i) {
                 match attr.name.as_str() {
-                    "pitch (degrees)" => attr.value = format!("{:.1}", pitch_degrees).into(),
-                    "yaw (degrees)" => attr.value = format!("{:.1}", yaw_degrees).into(),
+                    "pitch (degrees)" => {
+                        attr.value = format!("{:.1}", pitch_degrees).into();
+                    }
+                    "yaw (degrees)" => {
+                        attr.value = format!("{:.1}", yaw_degrees).into();
+                    }
                     _ => {}
                 }
                 ui.attributes.set_row_data(i, attr);
             }
         }
-        
-        println!("🔄 Camera SharedStrings updated for entity {}", entity_id);
     }
 
     fn get_component_ui(&self) -> Rc<RefCell<ComponentUI>> {
@@ -171,16 +170,16 @@ impl Component for Camera {
 
 // Custom deserialization for Camera since RwLock can't be deserialized
 impl<'de> Deserialize<'de> for Camera {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, Deserializer, MapAccess, Visitor};
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+        use serde::de::{ self, Deserializer, MapAccess, Visitor };
         use std::fmt;
 
         #[derive(Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field { Pitch, Yaw }
+        enum Field {
+            Pitch,
+            Yaw,
+        }
 
         struct CameraVisitor;
 
@@ -191,13 +190,10 @@ impl<'de> Deserialize<'de> for Camera {
                 formatter.write_str("struct Camera")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Camera, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
+            fn visit_map<V>(self, mut map: V) -> Result<Camera, V::Error> where V: MapAccess<'de> {
                 let mut pitch = None;
                 let mut yaw = None;
-                
+
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Pitch => {
@@ -214,15 +210,15 @@ impl<'de> Deserialize<'de> for Camera {
                         }
                     }
                 }
-                
+
                 let pitch = pitch.ok_or_else(|| de::Error::missing_field("pitch"))?;
                 let yaw = yaw.ok_or_else(|| de::Error::missing_field("yaw"))?;
-                
+
                 // Create camera and set values
                 let camera = Camera::new();
                 *camera.pitch.write().unwrap() = pitch;
                 *camera.yaw.write().unwrap() = yaw;
-                
+
                 Ok(camera)
             }
         }

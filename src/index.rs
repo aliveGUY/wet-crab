@@ -12,31 +12,33 @@ pub mod game;
 use engine::*;
 use game::*;
 
+use crate::index::game::physics_system::PhysicsSystem;
+
 pub static PLAYER_ENTITY_ID: Lazy<RwLock<Option<EntityId>>> = Lazy::new(|| RwLock::new(None));
 
 fn spawn_wireframe_shapes(_gl: &glow::Context) {
-    use crate::index::engine::components::{Transform, Shape};
-    
+    use crate::index::engine::components::{ Transform, Shape };
+
     // Sphere at (-3, 0, 0)
     let sphere_entity = spawn();
     let sphere_shape = Shape::Sphere { radius: 1.0 };
     insert_many!(sphere_entity, Transform::new(-3.0, 0.0, 0.0), sphere_shape);
-    
+
     // Capsule at (-1, 0, 0)
     let capsule_entity = spawn();
     let capsule_shape = Shape::Capsule { radius: 0.5, height: 2.0 };
     insert_many!(capsule_entity, Transform::new(-1.0, 0.0, 0.0), capsule_shape);
-    
+
     // Box at (1, 0, 0)
     let box_entity = spawn();
     let box_shape = Shape::Box { half_extents: [0.5, 0.5, 0.5] };
     insert_many!(box_entity, Transform::new(1.0, 0.0, 0.0), box_shape);
-    
+
     // Cylinder at (3, 0, 0)
     let cylinder_entity = spawn();
     let cylinder_shape = Shape::Cylinder { radius: 0.8, height: 1.5 };
     insert_many!(cylinder_entity, Transform::new(3.0, 0.0, 0.0), cylinder_shape);
-    
+
     println!("✅ Spawned wireframe shapes: Sphere, Capsule, Box, Cylinder");
 }
 
@@ -91,9 +93,18 @@ impl Program {
         let mut writemask = 0i32;
         unsafe {
             self.gl.get_parameter_i32_slice(glow::VIEWPORT, &mut viewport);
-            self.gl.get_parameter_i32_slice(glow::CURRENT_PROGRAM, std::slice::from_mut(&mut program));
-            self.gl.get_parameter_i32_slice(glow::DEPTH_FUNC, std::slice::from_mut(&mut depth_func));
-            self.gl.get_parameter_i32_slice(glow::DEPTH_WRITEMASK, std::slice::from_mut(&mut writemask));
+            self.gl.get_parameter_i32_slice(
+                glow::CURRENT_PROGRAM,
+                std::slice::from_mut(&mut program)
+            );
+            self.gl.get_parameter_i32_slice(
+                glow::DEPTH_FUNC,
+                std::slice::from_mut(&mut depth_func)
+            );
+            self.gl.get_parameter_i32_slice(
+                glow::DEPTH_WRITEMASK,
+                std::slice::from_mut(&mut writemask)
+            );
             self.gl.enable(glow::DEPTH_TEST);
             self.gl.depth_func(glow::LESS);
             self.gl.depth_mask(true);
@@ -104,6 +115,7 @@ impl Program {
         }
 
         RenderSystem::update(&self.gl, width, height);
+        PhysicsSystem::update();
 
         unsafe {
             self.gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);

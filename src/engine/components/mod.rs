@@ -11,6 +11,7 @@ pub mod static_object3d;
 pub mod system;
 pub mod transform;
 pub mod metadata;
+pub mod collider;
 
 // Re-export commonly used types for convenience
 pub use camera::Camera as CameraComponent;
@@ -18,6 +19,7 @@ pub use system::SystemTrait;
 pub use transform::Transform;
 pub use metadata::Metadata;
 pub use shapes::Shape;
+pub use collider::{Collider, ColliderLayer};
 #[allow(dead_code)]
 pub type Material = self::material::Material;
 #[allow(dead_code)]

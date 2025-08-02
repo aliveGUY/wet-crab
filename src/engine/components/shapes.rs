@@ -3,10 +3,11 @@ use crate::{ComponentUI, AttributeUI};
 use slint::{VecModel, ModelRc};
 use std::rc::Rc;
 use std::cell::RefCell;
+use serde::{Serialize, Deserialize};
 
 pub type Vec3 = [f32; 3];
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Shape {
     Sphere {
         radius: f32,

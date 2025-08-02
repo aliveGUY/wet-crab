@@ -282,9 +282,7 @@ impl Component for Transform {
                 ui.attributes.set_row_data(i, attr);
             }
         }
-        
-        println!("🔄 Transform SharedStrings updated for entity {}", entity_id);
-    }
+            }
 
     fn get_component_ui(&self) -> Rc<RefCell<ComponentUI>> {
         self.component_ui.clone()

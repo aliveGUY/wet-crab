@@ -5,7 +5,7 @@ use std::any::TypeId;
 use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
 use crate::{ copy_entity, delete_entity, ComponentUI, InterfaceState, LevelEditorUI };
 use crate::{ query_get_all, get_all_components_by_id };
-use crate::index::engine::components::{ Metadata, Transform };
+use crate::index::engine::components::{ Metadata, Transform, Collider };
 use crate::index::engine::components::camera::Camera;
 use crate::index::engine::components::static_object3d::StaticObject3D;
 use crate::index::engine::components::animated_object3d::AnimatedObject3D;
@@ -25,6 +25,7 @@ static COMPONENT_TYPE_MAP: Lazy<HashMap<&'static str, TypeId>> = Lazy::new(|| {
     m.insert("Camera", TypeId::of::<Camera>());
     m.insert("Static Object 3D", TypeId::of::<StaticObject3D>());
     m.insert("Animated Object 3D", TypeId::of::<AnimatedObject3D>());
+    m.insert("Collider", TypeId::of::<Collider>());
     m
 });
 

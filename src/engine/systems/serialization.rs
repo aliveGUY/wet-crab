@@ -3,7 +3,7 @@ use std::io::Write;
 use serde::{Serialize, Deserialize};
 
 use crate::index::engine::systems::entity_component_system::{ WORLD, World };
-use crate::index::engine::components::{ Metadata, Transform };
+use crate::index::engine::components::{ Metadata, Transform, Collider };
 use crate::index::engine::components::camera::Camera;
 use crate::index::engine::components::static_object3d::StaticObject3D;
 use crate::index::engine::components::animated_object3d::AnimatedObject3D;
@@ -22,6 +22,7 @@ enum SerializableComponent {
     Camera(Camera),
     StaticObject3D(StaticObject3D),
     AnimatedObject3D(AnimatedObject3D),
+    Collider(Collider),
 }
 
 // ================================================================================================
@@ -83,6 +84,9 @@ pub fn try_save_world(path: &str) -> Result<(), SerializationError> {
             if let Some(animated_obj) = world.get_component_readonly::<AnimatedObject3D>(entity_id) {
                 entity_components.push(SerializableComponent::AnimatedObject3D(animated_obj.clone()));
             }
+            if let Some(collider) = world.get_component_readonly::<Collider>(entity_id) {
+                entity_components.push(SerializableComponent::Collider(collider.clone()));
+            }
 
             // Only add entities that have components
             if !entity_components.is_empty() {
@@ -91,23 +95,32 @@ pub fn try_save_world(path: &str) -> Result<(), SerializationError> {
         }
 
         // Serialize to JSON
-        let Ok(json) = serde_json::to_string_pretty(&all_entities_data) else {
-            return Err(SerializationError::JsonParseError(
-                serde_json::from_str::<()>("").unwrap_err()
-            ));
+        let json = match serde_json::to_string_pretty(&all_entities_data) {
+            Ok(json) => json,
+            Err(err) => {
+                eprintln!("❌ JSON serialization failed: {}", err);
+                return Err(SerializationError::JsonParseError(err));
+            }
         };
 
         // Write to file
-        let Ok(mut file) = File::create(&absolute_path) else {
-            return Err(SerializationError::IoError(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied, "Failed to create file"
-            )));
+        let mut file = match File::create(&absolute_path) {
+            Ok(file) => file,
+            Err(err) => {
+                eprintln!("❌ Failed to create file {}: {}", absolute_path.display(), err);
+                return Err(SerializationError::IoError(err));
+            }
         };
         
-        let Ok(_) = file.write_all(json.as_bytes()) else {
-            return Err(SerializationError::IoError(std::io::Error::new(
-                std::io::ErrorKind::WriteZero, "Failed to write to file"
-            )));
+        if let Err(err) = file.write_all(json.as_bytes()) {
+            eprintln!("❌ Failed to write to file {}: {}", absolute_path.display(), err);
+            return Err(SerializationError::IoError(err));
+        };
+
+        // Ensure data is written to disk
+        if let Err(err) = file.flush() {
+            eprintln!("❌ Failed to flush file {}: {}", absolute_path.display(), err);
+            return Err(SerializationError::IoError(err));
         };
 
         println!("💾 Saved {} entities to {}", all_entities_data.len(), path);
@@ -126,15 +139,32 @@ pub fn try_load_world(path: &str) -> Result<(), SerializationError> {
     WORLD.with(|w| {
         let mut world = w.borrow_mut();
 
-        let Ok(data_str) = std::fs::read_to_string(&absolute_path) else {
-            return Err(SerializationError::FileNotFound(path.to_string()));
+        let data_str = match std::fs::read_to_string(&absolute_path) {
+            Ok(content) => {
+                if content.trim().is_empty() {
+                    eprintln!("❌ JSON file is empty: {}", absolute_path.display());
+                    return Err(SerializationError::JsonParseError(
+                        serde_json::Error::io(std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "JSON file is empty"
+                        ))
+                    ));
+                }
+                content
+            },
+            Err(err) => {
+                eprintln!("❌ Failed to read file {}: {}", absolute_path.display(), err);
+                return Err(SerializationError::FileNotFound(path.to_string()));
+            }
         };
 
-        let Ok(entities_data): Result<Vec<Vec<SerializableComponent>>, _> = 
-            serde_json::from_str(&data_str) else {
-            return Err(SerializationError::JsonParseError(
-                serde_json::from_str::<()>("").unwrap_err()
-            ));
+        let entities_data: Vec<Vec<SerializableComponent>> = match serde_json::from_str(&data_str) {
+            Ok(data) => data,
+            Err(err) => {
+                eprintln!("❌ JSON parsing failed for {}: {}", absolute_path.display(), err);
+                eprintln!("❌ File content preview: {}", &data_str[..std::cmp::min(200, data_str.len())]);
+                return Err(SerializationError::JsonParseError(err));
+            }
         };
 
         // Clear current world
@@ -181,6 +211,11 @@ pub fn try_load_world(path: &str) -> Result<(), SerializationError> {
                         // OpenGL resources and UI are already properly initialized by custom deserialize
                         animated_obj.update_component_ui(&entity_id);
                         world.insert(&entity_id, animated_obj);
+                    }
+                    SerializableComponent::Collider(mut collider) => {
+                        // Update UI to reflect loaded state
+                        collider.update_component_ui(&entity_id);
+                        world.insert(&entity_id, collider);
                     }
                 }
             }

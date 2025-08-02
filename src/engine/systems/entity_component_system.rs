@@ -306,6 +306,100 @@ impl World {
         results
     }
 
+    /// Get all entities that have two specific component types
+    pub fn query_get_all2<C1: Component + Clone, C2: Component + Clone>(&self) -> Vec<(EntityId, C1, C2)> {
+        let type_id1 = TypeId::of::<C1>();
+        let type_id2 = TypeId::of::<C2>();
+
+        // Find the bits for both component types
+        let bit1 = match self.registry.bits.get(&type_id1) {
+            Some(bit) => *bit,
+            None => return Vec::new(),
+        };
+        let bit2 = match self.registry.bits.get(&type_id2) {
+            Some(bit) => *bit,
+            None => return Vec::new(),
+        };
+
+        let mask = (1u64 << bit1) | (1u64 << bit2);
+        let mut results = Vec::new();
+
+        // Get all entities that have both components
+        for (entity_id, &entity_mask) in &self.meta {
+            if (entity_mask & mask) == mask {
+                if let (Some(store1), Some(store2)) = (
+                    self.stores.get(&type_id1),
+                    self.stores.get(&type_id2)
+                ) {
+                    if let (Some(store1), Some(store2)) = (
+                        store1.as_any().downcast_ref::<Store<C1>>(),
+                        store2.as_any().downcast_ref::<Store<C2>>()
+                    ) {
+                        if let (Some(comp1), Some(comp2)) = (
+                            store1.0.get(entity_id),
+                            store2.0.get(entity_id)
+                        ) {
+                            results.push((entity_id.clone(), comp1.clone(), comp2.clone()));
+                        }
+                    }
+                }
+            }
+        }
+
+        results
+    }
+
+    /// Get all entities that have three specific component types
+    pub fn query_get_all3<C1: Component + Clone, C2: Component + Clone, C3: Component + Clone>(&self) -> Vec<(EntityId, C1, C2, C3)> {
+        let type_id1 = TypeId::of::<C1>();
+        let type_id2 = TypeId::of::<C2>();
+        let type_id3 = TypeId::of::<C3>();
+
+        // Find the bits for all component types
+        let bit1 = match self.registry.bits.get(&type_id1) {
+            Some(bit) => *bit,
+            None => return Vec::new(),
+        };
+        let bit2 = match self.registry.bits.get(&type_id2) {
+            Some(bit) => *bit,
+            None => return Vec::new(),
+        };
+        let bit3 = match self.registry.bits.get(&type_id3) {
+            Some(bit) => *bit,
+            None => return Vec::new(),
+        };
+
+        let mask = (1u64 << bit1) | (1u64 << bit2) | (1u64 << bit3);
+        let mut results = Vec::new();
+
+        // Get all entities that have all three components
+        for (entity_id, &entity_mask) in &self.meta {
+            if (entity_mask & mask) == mask {
+                if let (Some(store1), Some(store2), Some(store3)) = (
+                    self.stores.get(&type_id1),
+                    self.stores.get(&type_id2),
+                    self.stores.get(&type_id3)
+                ) {
+                    if let (Some(store1), Some(store2), Some(store3)) = (
+                        store1.as_any().downcast_ref::<Store<C1>>(),
+                        store2.as_any().downcast_ref::<Store<C2>>(),
+                        store3.as_any().downcast_ref::<Store<C3>>()
+                    ) {
+                        if let (Some(comp1), Some(comp2), Some(comp3)) = (
+                            store1.0.get(entity_id),
+                            store2.0.get(entity_id),
+                            store3.0.get(entity_id)
+                        ) {
+                            results.push((entity_id.clone(), comp1.clone(), comp2.clone(), comp3.clone()));
+                        }
+                    }
+                }
+            }
+        }
+
+        results
+    }
+
     /// Get all entity IDs that have a specific component type
     pub fn query_get_all_ids<T: Component>(&self) -> Vec<EntityId> {
         let type_id = TypeId::of::<T>();
@@ -483,14 +577,33 @@ macro_rules! get_query_by_id {
     };
 }
 
-// New query_get_all! macro - returns all entities with a specific component
+// New query_get_all! macro - returns all entities with specific component(s)
 #[macro_export]
 macro_rules! query_get_all {
+    // Single component
     ($c1:ty) => {
         {
             crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
                 let world = w.borrow();
                 world.query_get_all::<$c1>()
+            })
+        }
+    };
+    // Two components
+    ($c1:ty, $c2:ty) => {
+        {
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let world = w.borrow();
+                world.query_get_all2::<$c1, $c2>()
+            })
+        }
+    };
+    // Three components
+    ($c1:ty, $c2:ty, $c3:ty) => {
+        {
+            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
+                let world = w.borrow();
+                world.query_get_all3::<$c1, $c2, $c3>()
             })
         }
     };

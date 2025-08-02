@@ -227,3 +227,104 @@ pub fn mat4x4_extract_euler_angles(matrix: &Mat4x4) -> [f32; 3] {
     
     [pitch, yaw, roll]
 }
+
+// ================================================================================================
+// COLLISION DETECTION MATH UTILITIES
+// ================================================================================================
+
+pub type Vec3 = [f32; 3];
+
+/// 3D dot product
+pub fn dot(a: Vec3, b: Vec3) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// 3D cross product
+pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+/// Length squared of a 3D vector
+pub fn len2(v: Vec3) -> f32 {
+    dot(v, v)
+}
+
+/// Squared distance between two 3D points
+pub fn dist2(a: Vec3, b: Vec3) -> f32 {
+    let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    len2(d)
+}
+
+/// Computes squared distance between point p and line segment ab
+pub fn dist_point_segment2(p: Vec3, a: Vec3, b: Vec3) -> f32 {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+    let ab2 = dot(ab, ab);
+    
+    if ab2 < 1e-8 {
+        // Degenerate segment, treat as point
+        return dist2(p, a);
+    }
+    
+    let t = (dot(ap, ab) / ab2).max(0.0).min(1.0);
+    let closest = [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t];
+    dist2(p, closest)
+}
+
+/// Computes squared distance between two line segments
+/// Based on "Distance between 3D line segments" algorithm
+pub fn segment_segment_distance2(a1: Vec3, a2: Vec3, b1: Vec3, b2: Vec3) -> f32 {
+    let d1 = [a2[0] - a1[0], a2[1] - a1[1], a2[2] - a1[2]];
+    let d2 = [b2[0] - b1[0], b2[1] - b1[1], b2[2] - b1[2]];
+    let r = [a1[0] - b1[0], a1[1] - b1[1], a1[2] - b1[2]];
+    
+    let a = dot(d1, d1);
+    let e = dot(d2, d2);
+    let f = dot(d2, r);
+    
+    // Check if either or both segments degenerate into points
+    if a <= 1e-8 && e <= 1e-8 {
+        // Both segments are points
+        return dist2(a1, b1);
+    }
+    
+    if a <= 1e-8 {
+        // First segment is a point
+        return dist_point_segment2(a1, b1, b2);
+    }
+    
+    if e <= 1e-8 {
+        // Second segment is a point
+        return dist_point_segment2(b1, a1, a2);
+    }
+    
+    let c = dot(d1, r);
+    let b = dot(d1, d2);
+    let denom = a * e - b * b;
+    
+    let mut s = 0.0;
+    let mut t = 0.0;
+    
+    if denom != 0.0 {
+        s = ((b * f - c * e) / denom).max(0.0).min(1.0);
+    }
+    
+    t = (b * s + f) / e;
+    
+    if t < 0.0 {
+        t = 0.0;
+        s = (-c / a).max(0.0).min(1.0);
+    } else if t > 1.0 {
+        t = 1.0;
+        s = ((b - c) / a).max(0.0).min(1.0);
+    }
+    
+    let c1 = [a1[0] + d1[0] * s, a1[1] + d1[1] * s, a1[2] + d1[2] * s];
+    let c2 = [b1[0] + d2[0] * t, b1[1] + d2[1] * t, b1[2] + d2[2] * t];
+    
+    dist2(c1, c2)
+}

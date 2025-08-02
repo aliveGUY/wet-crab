@@ -1,11 +1,30 @@
 use glow::HasContext;
 
 // Import types and functions from parent scope
-use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, SystemTrait, CameraComponent, Shape};
+use crate::index::engine::components::{
+    AnimatedObject3DComponent,
+    CameraComponent,
+    Collider,
+    Shape,
+    StaticObject3DComponent,
+    SystemTrait,
+};
 use crate::index::engine::components::SharedComponents::Transform;
 use crate::index::engine::components::AnimatedObject3D::AnimationType;
-use crate::index::engine::utils::{mat4x4_perspective, mat4x4_mul, mat4x4_identity, node_world_txfm};
-use crate::index::engine::managers::assets_manager::{get_static_outline_shader, get_animated_outline_shader, get_box_shader, get_sphere_shader, get_capsule_shader, get_cylinder_shader};
+use crate::index::engine::utils::{
+    mat4x4_perspective,
+    mat4x4_mul,
+    mat4x4_identity,
+    node_world_txfm,
+};
+use crate::index::engine::managers::assets_manager::{
+    get_static_outline_shader,
+    get_animated_outline_shader,
+    get_box_shader,
+    get_sphere_shader,
+    get_capsule_shader,
+    get_cylinder_shader,
+};
 use crate::index::engine::systems::interface_system::InterfaceSystem;
 use crate::index::PLAYER_ENTITY_ID;
 
@@ -34,24 +53,24 @@ impl RenderSystem {
         unsafe {
             // Set viewport for current frame
             gl.viewport(0, 0, width as i32, height as i32);
-            
+
             // Clear both color and depth buffers
             gl.clear_color(0.1, 0.1, 0.1, 1.0);
             gl.clear_depth_f32(1.0); // Clear depth to far plane
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-            
+
             // Verify depth testing is enabled and configured correctly
             if !gl.is_enabled(glow::DEPTH_TEST) {
                 eprintln!("[WARNING] Depth testing is disabled in RenderSystem!");
                 gl.enable(glow::DEPTH_TEST);
             }
-            
+
             // Ensure proper depth function
             let current_depth_func = gl.get_parameter_i32(glow::DEPTH_FUNC);
-            if current_depth_func != glow::LESS as i32 {
+            if current_depth_func != (glow::LESS as i32) {
                 gl.depth_func(glow::LESS);
             }
-            
+
             // Ensure depth writes are enabled
             let depth_writemask = gl.get_parameter_i32(glow::DEPTH_WRITEMASK);
             if depth_writemask == 0 {
@@ -64,13 +83,17 @@ impl RenderSystem {
             let player_id_guard = PLAYER_ENTITY_ID.read().unwrap();
             let player_id = match player_id_guard.as_ref() {
                 Some(id) => id,
-                None => return,
+                None => {
+                    return;
+                }
             };
 
-            // Get camera - early return if None  
+            // Get camera - early return if None
             let camera = match get_query_by_id!(player_id, (CameraComponent)) {
                 Some(cam) => cam,
-                None => return,
+                None => {
+                    return;
+                }
             };
 
             // Get view matrix while we have the camera reference
@@ -83,7 +106,6 @@ impl RenderSystem {
 
         // Get selection state for outline rendering
         let (selected_id, hovered_id) = Self::get_selection_state();
-        
 
         Self::render_animated_objects(gl, &view_proj, &selected_id, &hovered_id);
         Self::render_static_objects(gl, &view_proj, &selected_id, &hovered_id);
@@ -95,39 +117,46 @@ impl RenderSystem {
     }
 
     fn render_shapes(gl: &glow::Context, view_proj: &[f32; 16]) {
-        query!((Transform, Shape), |_entity_id, transform, shape| {
-            let world_txfm = transform.get_matrix();
-            Self::render_shape(gl, shape, world_txfm, view_proj);
+        query!((Transform, Collider), |_entity_id, transform, collider| {
+            if !collider.is_hidden {
+                let world_txfm = transform.get_matrix();
+                Self::render_shape(gl, &collider.shape, world_txfm, view_proj);
+            }
         });
     }
 
-    fn render_shape(gl: &glow::Context, shape: &Shape, world_txfm: &[f32; 16], view_proj: &[f32; 16]) {
+    fn render_shape(
+        gl: &glow::Context,
+        shape: &Shape,
+        world_txfm: &[f32; 16],
+        view_proj: &[f32; 16]
+    ) {
         unsafe {
             let (shader, vertex_count) = match shape {
                 Shape::Box { half_extents } => {
                     let shader = get_box_shader();
                     gl.use_program(Some(shader));
-                    
+
                     // Set shape-specific uniforms
                     if let Some(loc) = gl.get_uniform_location(shader, "half_extents") {
                         gl.uniform_3_f32_slice(Some(&loc), half_extents);
                     }
                     (shader, 24) // 12 edges * 2 vertices each
-                },
+                }
                 Shape::Sphere { radius } => {
                     let shader = get_sphere_shader();
                     gl.use_program(Some(shader));
-                    
+
                     // Set shape-specific uniforms
                     if let Some(loc) = gl.get_uniform_location(shader, "radius") {
                         gl.uniform_1_f32(Some(&loc), *radius);
                     }
                     (shader, 192) // 3 circles * 32 segments * 2 vertices each
-                },
+                }
                 Shape::Capsule { radius, height } => {
                     let shader = get_capsule_shader();
                     gl.use_program(Some(shader));
-                    
+
                     // Set shape-specific uniforms
                     if let Some(loc) = gl.get_uniform_location(shader, "radius") {
                         gl.uniform_1_f32(Some(&loc), *radius);
@@ -136,11 +165,11 @@ impl RenderSystem {
                         gl.uniform_1_f32(Some(&loc), *height);
                     }
                     (shader, 516) // 258 lines * 2 vertices each (complete hemispheres)
-                },
+                }
                 Shape::Cylinder { radius, height } => {
                     let shader = get_cylinder_shader();
                     gl.use_program(Some(shader));
-                    
+
                     // Set shape-specific uniforms
                     if let Some(loc) = gl.get_uniform_location(shader, "radius") {
                         gl.uniform_1_f32(Some(&loc), *radius);
@@ -149,7 +178,7 @@ impl RenderSystem {
                         gl.uniform_1_f32(Some(&loc), *height);
                     }
                     (shader, 136) // 68 lines * 2 vertices each (64 circle lines + 4 vertical lines)
-                },
+                }
             };
 
             // Set common uniforms
@@ -165,10 +194,15 @@ impl RenderSystem {
         }
     }
 
-    fn render_animated_objects(gl: &glow::Context, view_proj: &[f32; 16], selected_id: &str, hovered_id: &str) {
+    fn render_animated_objects(
+        gl: &glow::Context,
+        view_proj: &[f32; 16],
+        selected_id: &str,
+        hovered_id: &str
+    ) {
         query!((Transform, AnimatedObject3DComponent), |_id, transform, animated_object| {
             Self::setup_viewport_uniform(gl, view_proj, animated_object.material.shader_program);
-            
+
             unsafe {
                 gl.use_program(Some(animated_object.material.shader_program));
             }
@@ -177,38 +211,46 @@ impl RenderSystem {
                 let animation_channels: Vec<crate::index::engine::components::AnimatedObject3D::AnimationChannel> =
                     animated_object.animation_channels
                         .iter()
-                        .map(|ch| crate::index::engine::components::AnimatedObject3D::AnimationChannel {
-                            target: ch.target,
-                            animation_type: match ch.animation_type {
-                                AnimationType::Translation =>
-                                    crate::index::engine::components::AnimatedObject3D::AnimationType::Translation,
-                                AnimationType::Rotation =>
-                                    crate::index::engine::components::AnimatedObject3D::AnimationType::Rotation,
-                                AnimationType::Scale =>
-                                    crate::index::engine::components::AnimatedObject3D::AnimationType::Scale,
-                            },
-                            num_timesteps: ch.num_timesteps,
-                            times: ch.times.clone(),
-                            data: ch.data.clone(),
-                        })
+                        .map(
+                            |
+                                ch
+                            | crate::index::engine::components::AnimatedObject3D::AnimationChannel {
+                                target: ch.target,
+                                animation_type: match ch.animation_type {
+                                    AnimationType::Translation =>
+                                        crate::index::engine::components::AnimatedObject3D::AnimationType::Translation,
+                                    AnimationType::Rotation =>
+                                        crate::index::engine::components::AnimatedObject3D::AnimationType::Rotation,
+                                    AnimationType::Scale =>
+                                        crate::index::engine::components::AnimatedObject3D::AnimationType::Scale,
+                                },
+                                num_timesteps: ch.num_timesteps,
+                                times: ch.times.clone(),
+                                data: ch.data.clone(),
+                            }
+                        )
                         .collect();
 
                 // Convert skeleton to the expected type
-                let mut skeleton_converted = crate::index::engine::components::AnimatedObject3D::Skeleton {
-                    nodes: animated_object.skeleton.nodes
-                        .iter()
-                        .map(|n| crate::index::engine::components::AnimatedObject3D::Node {
-                            translation: n.translation,
-                            rotation: n.rotation,
-                            scale: n.scale,
-                            parent: n.parent,
-                        })
-                        .collect(),
-                    joint_ids: animated_object.skeleton.joint_ids.clone(),
-                    joint_inverse_mats: animated_object.skeleton.joint_inverse_mats.clone(),
-                };
+                let mut skeleton_converted =
+                    crate::index::engine::components::AnimatedObject3D::Skeleton {
+                        nodes: animated_object.skeleton.nodes
+                            .iter()
+                            .map(|n| crate::index::engine::components::AnimatedObject3D::Node {
+                                translation: n.translation,
+                                rotation: n.rotation,
+                                scale: n.scale,
+                                parent: n.parent,
+                            })
+                            .collect(),
+                        joint_ids: animated_object.skeleton.joint_ids.clone(),
+                        joint_inverse_mats: animated_object.skeleton.joint_inverse_mats.clone(),
+                    };
 
-                animated_object.animator.update_with_data(&animation_channels[..], &mut skeleton_converted);
+                animated_object.animator.update_with_data(
+                    &animation_channels[..],
+                    &mut skeleton_converted
+                );
 
                 // Copy back the updated nodes
                 for (i, node) in skeleton_converted.nodes.iter().enumerate() {
@@ -254,10 +296,12 @@ impl RenderSystem {
                 }
 
                 // Upload world transform uniform
-                if let Some(loc) = gl.get_uniform_location(
-                    animated_object.material.shader_program,
-                    "world_txfm"
-                ) {
+                if
+                    let Some(loc) = gl.get_uniform_location(
+                        animated_object.material.shader_program,
+                        "world_txfm"
+                    )
+                {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), true, world_txfm);
                 }
 
@@ -269,16 +313,20 @@ impl RenderSystem {
                     .collect();
                 let flat_bones: Vec<f32> = bone_matrices.iter().flatten().copied().collect();
 
-                if let Some(loc) = gl.get_uniform_location(
-                    animated_object.material.shader_program,
-                    "inverse_bone_matrix"
-                ) {
+                if
+                    let Some(loc) = gl.get_uniform_location(
+                        animated_object.material.shader_program,
+                        "inverse_bone_matrix"
+                    )
+                {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_inverse);
                 }
-                if let Some(loc) = gl.get_uniform_location(
-                    animated_object.material.shader_program,
-                    "bone_matrix"
-                ) {
+                if
+                    let Some(loc) = gl.get_uniform_location(
+                        animated_object.material.shader_program,
+                        "bone_matrix"
+                    )
+                {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), true, &flat_bones);
                 }
 
@@ -293,24 +341,29 @@ impl RenderSystem {
         });
     }
 
-    fn render_static_objects(gl: &glow::Context, view_proj: &[f32; 16], selected_id: &str, hovered_id: &str) {
+    fn render_static_objects(
+        gl: &glow::Context,
+        view_proj: &[f32; 16],
+        selected_id: &str,
+        hovered_id: &str
+    ) {
         query!((Transform, StaticObject3DComponent), |entity_id, transform, static_object| {
             // Check if this entity needs an outline
             if let Some(outline_color) = Self::get_outline_info(entity_id, selected_id, hovered_id) {
                 unsafe {
                     // Enable front-face culling for outline
                     gl.cull_face(glow::FRONT);
-                    
+
                     // Use outline shader
                     let outline_shader = get_static_outline_shader();
                     gl.use_program(Some(outline_shader));
-                    
+
                     // Set up uniforms for outline
                     Self::setup_viewport_uniform(gl, view_proj, outline_shader);
-                    
+
                     let world_txfm = transform.get_matrix();
                     gl.bind_vertex_array(Some(static_object.mesh.vao));
-                    
+
                     // Upload uniforms
                     if let Some(loc) = gl.get_uniform_location(outline_shader, "world_txfm") {
                         gl.uniform_matrix_4_f32_slice(Some(&loc), true, world_txfm);
@@ -321,7 +374,7 @@ impl RenderSystem {
                     if let Some(loc) = gl.get_uniform_location(outline_shader, "outline_color") {
                         gl.uniform_3_f32_slice(Some(&loc), &outline_color);
                     }
-                    
+
                     // Draw outline
                     gl.draw_elements(
                         glow::TRIANGLES,
@@ -329,15 +382,15 @@ impl RenderSystem {
                         glow::UNSIGNED_SHORT,
                         0
                     );
-                    
+
                     // Reset to back-face culling for normal rendering
                     gl.cull_face(glow::BACK);
                 }
             }
-            
+
             // PASS 2: Render normal object
             Self::setup_viewport_uniform(gl, view_proj, static_object.material.shader_program);
-            
+
             // Use normal shader
             unsafe {
                 gl.use_program(Some(static_object.material.shader_program));
@@ -353,7 +406,12 @@ impl RenderSystem {
                 gl.bind_vertex_array(Some(static_object.mesh.vao));
 
                 // Upload world transform uniform
-                if let Some(loc) = gl.get_uniform_location(static_object.material.shader_program, "world_txfm") {
+                if
+                    let Some(loc) = gl.get_uniform_location(
+                        static_object.material.shader_program,
+                        "world_txfm"
+                    )
+                {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), true, world_txfm);
                 }
 
@@ -368,7 +426,11 @@ impl RenderSystem {
         });
     }
 
-    fn setup_viewport_uniform(gl: &glow::Context, viewport_txfm: &[f32; 16], shader_program: glow::Program) {
+    fn setup_viewport_uniform(
+        gl: &glow::Context,
+        viewport_txfm: &[f32; 16],
+        shader_program: glow::Program
+    ) {
         unsafe {
             gl.use_program(Some(shader_program));
 
