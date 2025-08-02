@@ -5,6 +5,7 @@ pub mod camera;
 pub mod material;
 pub mod mesh;
 pub mod shared_components;
+pub mod shapes;
 pub mod skeleton;
 pub mod static_object3d;
 pub mod system;
@@ -16,6 +17,7 @@ pub use camera::Camera as CameraComponent;
 pub use system::SystemTrait;
 pub use transform::Transform;
 pub use metadata::Metadata;
+pub use shapes::Shape;
 #[allow(dead_code)]
 pub type Material = self::material::Material;
 #[allow(dead_code)]

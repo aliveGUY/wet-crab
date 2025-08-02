@@ -1,11 +1,11 @@
 use glow::HasContext;
 
 // Import types and functions from parent scope
-use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, SystemTrait, CameraComponent};
+use crate::index::engine::components::{StaticObject3DComponent, AnimatedObject3DComponent, SystemTrait, CameraComponent, Shape};
 use crate::index::engine::components::SharedComponents::Transform;
 use crate::index::engine::components::AnimatedObject3D::AnimationType;
 use crate::index::engine::utils::{mat4x4_perspective, mat4x4_mul, mat4x4_identity, node_world_txfm};
-use crate::index::engine::managers::assets_manager::{get_static_outline_shader, get_animated_outline_shader};
+use crate::index::engine::managers::assets_manager::{get_static_outline_shader, get_animated_outline_shader, get_box_shader, get_sphere_shader, get_capsule_shader, get_cylinder_shader};
 use crate::index::engine::systems::interface_system::InterfaceSystem;
 use crate::index::PLAYER_ENTITY_ID;
 
@@ -87,9 +87,81 @@ impl RenderSystem {
 
         Self::render_animated_objects(gl, &view_proj, &selected_id, &hovered_id);
         Self::render_static_objects(gl, &view_proj, &selected_id, &hovered_id);
+        Self::render_shapes(gl, &view_proj);
 
         unsafe {
             gl.bind_vertex_array(None);
+        }
+    }
+
+    fn render_shapes(gl: &glow::Context, view_proj: &[f32; 16]) {
+        query!((Transform, Shape), |_entity_id, transform, shape| {
+            let world_txfm = transform.get_matrix();
+            Self::render_shape(gl, shape, world_txfm, view_proj);
+        });
+    }
+
+    fn render_shape(gl: &glow::Context, shape: &Shape, world_txfm: &[f32; 16], view_proj: &[f32; 16]) {
+        unsafe {
+            let (shader, vertex_count) = match shape {
+                Shape::Box { half_extents } => {
+                    let shader = get_box_shader();
+                    gl.use_program(Some(shader));
+                    
+                    // Set shape-specific uniforms
+                    if let Some(loc) = gl.get_uniform_location(shader, "half_extents") {
+                        gl.uniform_3_f32_slice(Some(&loc), half_extents);
+                    }
+                    (shader, 24) // 12 edges * 2 vertices each
+                },
+                Shape::Sphere { radius } => {
+                    let shader = get_sphere_shader();
+                    gl.use_program(Some(shader));
+                    
+                    // Set shape-specific uniforms
+                    if let Some(loc) = gl.get_uniform_location(shader, "radius") {
+                        gl.uniform_1_f32(Some(&loc), *radius);
+                    }
+                    (shader, 192) // 3 circles * 32 segments * 2 vertices each
+                },
+                Shape::Capsule { radius, height } => {
+                    let shader = get_capsule_shader();
+                    gl.use_program(Some(shader));
+                    
+                    // Set shape-specific uniforms
+                    if let Some(loc) = gl.get_uniform_location(shader, "radius") {
+                        gl.uniform_1_f32(Some(&loc), *radius);
+                    }
+                    if let Some(loc) = gl.get_uniform_location(shader, "height") {
+                        gl.uniform_1_f32(Some(&loc), *height);
+                    }
+                    (shader, 516) // 258 lines * 2 vertices each (complete hemispheres)
+                },
+                Shape::Cylinder { radius, height } => {
+                    let shader = get_cylinder_shader();
+                    gl.use_program(Some(shader));
+                    
+                    // Set shape-specific uniforms
+                    if let Some(loc) = gl.get_uniform_location(shader, "radius") {
+                        gl.uniform_1_f32(Some(&loc), *radius);
+                    }
+                    if let Some(loc) = gl.get_uniform_location(shader, "height") {
+                        gl.uniform_1_f32(Some(&loc), *height);
+                    }
+                    (shader, 136) // 68 lines * 2 vertices each (64 circle lines + 4 vertical lines)
+                },
+            };
+
+            // Set common uniforms
+            if let Some(loc) = gl.get_uniform_location(shader, "world_txfm") {
+                gl.uniform_matrix_4_f32_slice(Some(&loc), true, world_txfm);
+            }
+            if let Some(loc) = gl.get_uniform_location(shader, "viewport_txfm") {
+                gl.uniform_matrix_4_f32_slice(Some(&loc), true, view_proj);
+            }
+
+            // Draw using GL_LINES for clean separate line segments
+            gl.draw_arrays(glow::LINES, 0, vertex_count);
         }
     }
 

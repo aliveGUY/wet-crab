@@ -21,6 +21,10 @@ pub struct AssetsManager {
     animated_shader_program: Option<glow::Program>,
     static_outline_shader_program: Option<glow::Program>,
     animated_outline_shader_program: Option<glow::Program>,
+    box_shader_program: Option<glow::Program>,
+    sphere_shader_program: Option<glow::Program>,
+    capsule_shader_program: Option<glow::Program>,
+    cylinder_shader_program: Option<glow::Program>,
     initialized: bool,
 }
 
@@ -33,6 +37,10 @@ impl AssetsManager {
             animated_shader_program: None,
             static_outline_shader_program: None,
             animated_outline_shader_program: None,
+            box_shader_program: None,
+            sphere_shader_program: None,
+            capsule_shader_program: None,
+            cylinder_shader_program: None,
             initialized: false,
         }
     }
@@ -73,10 +81,40 @@ impl AssetsManager {
             "animated_outline"
         );
 
+        // Create shape-specific shader programs
+        let box_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_box.glsl"),
+            include_str!("../../assets/shaders/fragment_box.glsl"),
+            "box"
+        );
+        let sphere_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_sphere.glsl"),
+            include_str!("../../assets/shaders/fragment_sphere.glsl"),
+            "sphere"
+        );
+        let capsule_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_capsule.glsl"),
+            include_str!("../../assets/shaders/fragment_capsule.glsl"),
+            "capsule"
+        );
+        let cylinder_shader = create_shader_program(
+            gl,
+            include_str!("../../assets/shaders/vertex_cylinder.glsl"),
+            include_str!("../../assets/shaders/fragment_cylinder.glsl"),
+            "cylinder"
+        );
+
         self.static_shader_program = Some(static_shader);
         self.animated_shader_program = Some(animated_shader);
         self.static_outline_shader_program = Some(static_outline_shader);
         self.animated_outline_shader_program = Some(animated_outline_shader);
+        self.box_shader_program = Some(box_shader);
+        self.sphere_shader_program = Some(sphere_shader);
+        self.capsule_shader_program = Some(capsule_shader);
+        self.cylinder_shader_program = Some(cylinder_shader);
 
         // Load animated asset (TestingDoll)
         self.load_animated_gltf(
@@ -315,5 +353,33 @@ pub fn get_animated_outline_shader() -> glow::Program {
     ASSETS_MANAGER.with(|manager| {
         manager.borrow().animated_outline_shader_program
             .expect("Animated outline shader not initialized")
+    })
+}
+
+pub fn get_box_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().box_shader_program
+            .expect("Box shader not initialized")
+    })
+}
+
+pub fn get_sphere_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().sphere_shader_program
+            .expect("Sphere shader not initialized")
+    })
+}
+
+pub fn get_capsule_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().capsule_shader_program
+            .expect("Capsule shader not initialized")
+    })
+}
+
+pub fn get_cylinder_shader() -> glow::Program {
+    ASSETS_MANAGER.with(|manager| {
+        manager.borrow().cylinder_shader_program
+            .expect("Cylinder shader not initialized")
     })
 }
