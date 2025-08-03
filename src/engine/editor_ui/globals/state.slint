@@ -22,6 +22,9 @@ export global InterfaceState {
     callback save-scene();
     callback spawn-blockout-platform();
     
+    // New callback for updating individual component fields
+    callback update-component-field(string /* entity_id */, string /* component_type */, string /* field_key */, string /* new_value */);
+    
     // New callback for parsing JSON components (implemented in Rust)
     callback parse-components-json(string /* components_json */) -> [ComponentData];
     

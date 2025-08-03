@@ -136,7 +136,23 @@ impl InterfaceSystem {
         state.on_component_changed({
             move |entity_id, component_json| {
                 println!("🔧 Component changed for entity {}: {}", entity_id, component_json);
-                // Self::update_component_from_json(entity_id.to_string(), component_json.to_string());
+                Self::update_component_from_json(entity_id.to_string(), component_json.to_string());
+            }
+        });
+
+        // Update component field callback - handle individual field updates
+        state.on_update_component_field({
+            move |entity_id, component_type, field_key, new_value| {
+                println!("🔧 Field update: entity={}, component={}, field={}, value={}", 
+                    entity_id, component_type, field_key, new_value);
+                
+                // Update the component field and reconstruct the component
+                Self::update_component_field_internal(
+                    entity_id.to_string(), 
+                    component_type.to_string(), 
+                    field_key.to_string(), 
+                    new_value.to_string()
+                );
             }
         });
 
@@ -191,6 +207,128 @@ impl InterfaceSystem {
         });
 
         Self { ui_weak: ui.as_weak() }
+    }
+
+    /// Update a specific field in a component and refresh the UI
+    fn update_component_field_internal(
+        entity_id: String, 
+        component_type: String, 
+        field_key: String, 
+        new_value: String
+    ) {
+        println!("🔧 Updating component field: entity={}, component={}, field={}, value={}", 
+            entity_id, component_type, field_key, new_value);
+
+        // Get the current component data
+        let components = get_all_components_dyn!(entity_id);
+        
+        for component in components {
+            if let Ok(json_str) = to_string(&component) {
+                // Parse the component JSON to check if it matches the component type
+                if let Ok(mut json_value) = serde_json::from_str::<Value>(&json_str) {
+                    if let Some(Value::String(comp_type)) = json_value.get("type") {
+                        if comp_type == &component_type {
+                            // Found the matching component, update the field
+                            if let Some(obj) = json_value.as_object_mut() {
+                                // Parse the new value appropriately
+                                let parsed_value = Self::parse_field_value(&new_value);
+                                obj.insert(field_key.clone(), parsed_value);
+                                
+                                // Convert back to JSON string
+                                if let Ok(updated_json) = serde_json::to_string(&json_value) {
+                                    println!("📝 Updated component JSON: {}", updated_json);
+                                    
+                                    // Update the ECS component using existing system
+                                    Self::update_ecs_component(&entity_id, &updated_json);
+                                    
+                                    // Refresh the UI to show the updated component
+                                    Self::refresh_selected_entity(&entity_id);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        println!("❌ Failed to find component {} for entity {}", component_type, entity_id);
+    }
+
+    /// Parse a string value into the appropriate JSON value type
+    fn parse_field_value(value_str: &str) -> Value {
+        // Try to parse as number first
+        if let Ok(int_val) = value_str.parse::<i64>() {
+            return Value::Number(serde_json::Number::from(int_val));
+        }
+        
+        if let Ok(float_val) = value_str.parse::<f64>() {
+            return Value::Number(serde_json::Number::from_f64(float_val).unwrap_or(serde_json::Number::from(0)));
+        }
+        
+        // Try to parse as boolean
+        if let Ok(bool_val) = value_str.parse::<bool>() {
+            return Value::Bool(bool_val);
+        }
+        
+        // Default to string
+        Value::String(value_str.to_string())
+    }
+
+    /// Update the ECS component using existing deserialization system
+    fn update_ecs_component(entity_id: &str, component_json: &str) {
+        println!("🔄 Updating ECS component for entity {}", entity_id);
+        println!("📝 Component JSON: {}", component_json);
+        
+        // Use the existing component-changed callback to handle deserialization
+        // This leverages whatever deserialization system is already in place
+        if let Some(system) = INTERFACE_SYSTEM.get() {
+            if let Ok(system) = system.lock() {
+                if let Some(ui) = system.ui_weak.upgrade() {
+                    let state = ui.global::<InterfaceState>();
+                    let entity_id_slint: slint::SharedString = entity_id.into();
+                    let component_json_slint: slint::SharedString = component_json.into();
+                    
+                    // Dispatch to existing component-changed system
+                    state.invoke_component_changed(entity_id_slint, component_json_slint);
+                    println!("✅ Component update dispatched to existing system");
+                }
+            }
+        }
+    }
+
+    /// Refresh the UI for the currently selected entity
+    fn refresh_selected_entity(entity_id: &str) {
+        if let Some(system) = INTERFACE_SYSTEM.get() {
+            if let Ok(system) = system.lock() {
+                if let Some(ui) = system.ui_weak.upgrade() {
+                    let state = ui.global::<InterfaceState>();
+                    
+                    // Check if this entity is currently selected
+                    if state.get_selected_index().to_string() == entity_id {
+                        // Re-trigger entity selection to refresh the component display
+                        let entity_id_slint: slint::SharedString = entity_id.into();
+                        state.invoke_entity_selected(entity_id_slint);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Update component from JSON using generic deserialization
+    fn update_component_from_json(entity_id: String, component_json: String) {
+        println!("🔄 Deserializing component JSON for entity {}", entity_id);
+        
+        // Use the generic Component enum deserialization - leverages existing serde type tagging
+        match serde_json::from_str::<crate::index::engine::systems::ecs::Component>(&component_json) {
+            Ok(component) => {
+                crate::index::engine::systems::ecs::insert(&entity_id, component);
+                println!("✅ Component updated successfully using generic deserialization");
+            },
+            Err(e) => {
+                println!("❌ Failed to deserialize component: {}", e);
+            }
+        }
     }
 
     fn update_entities_internal(&self) {

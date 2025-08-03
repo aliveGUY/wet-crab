@@ -30,6 +30,10 @@ export component ComponentListItem {
             for pair in fields: Textfield {
                 label: pair.key;
                 value: pair.value;
+                value-changed(field_key, new_value) => {
+                    // Request component JSON update from Rust
+                    InterfaceState.update-component-field(root.entity-id, root.title, field_key, new_value);
+                }
             }
         }
     }
