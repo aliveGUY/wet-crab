@@ -1,4 +1,4 @@
-use crate::index::engine::systems::entity_component_system::{spawn, EntityId};
+use crate::index::engine::systems::{spawn, EntityId};
 use crate::index::engine::components::{Transform, Metadata};
 use crate::index::engine::managers::assets_manager::{Assets, get_animated_object_copy};
 

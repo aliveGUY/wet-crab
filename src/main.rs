@@ -44,12 +44,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui_app = LevelEditorUI::new().expect("Failed to create Slint UI");
     println!("[DEBUG] Slint UI created successfully");
 
-    InterfaceSystem::initialize(&ui_app);
-
     // Initialize systems
     EventSystem::initialize();
     let keyboard_input_system = Rc::new(KeyboardInputSystem::new());
-    println!("[DEBUG] KeyboardInputSystem initialized");
+    InterfaceSystem::initialize(ui_app.as_weak());
+    println!("[DEBUG] KeyboardInputSystem and InterfaceSystem initialized");
 
     // Set up simplified event handling with KeyboardInputSystem
     println!("[DEBUG] Setting up simplified event handling...");
@@ -148,8 +147,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up UI callbacks
     println!("[DEBUG] Setting up UI callbacks...");
 
-    // Set up animation timer with KeyboardInputSystem updates
-    println!("[DEBUG] Setting up animation timer with KeyboardInputSystem updates...");
+    // Set up animation timer with system updates
+    println!("[DEBUG] Setting up animation timer with system updates...");
     let animation_timer = slint::Timer::default();
     let keyboard_system_for_timer = keyboard_input_system.clone();
 
@@ -163,8 +162,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 app.window().request_redraw();
             }
 
-            // Call KeyboardInputSystem update method each frame
+            // Call system update methods each frame
             keyboard_system_for_timer.update();
+            
+            // InterfaceSystem is now event-driven, no need for constant updates
         }
     );
 

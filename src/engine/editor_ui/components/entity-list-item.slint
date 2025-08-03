@@ -10,8 +10,6 @@ export component EntityListItem {
         width: 100%;
         mouse-cursor: pointer;
         
-        // Update hover state when has-hover changes
-        property <string> current-hover: self.has-hover ? root.entity-id : "";
         Rectangle {
             border-radius: 6px;
             background: InterfaceState.selected-index == root.entity-id ? Colors.card-background-selected : Colors.card-background;
@@ -49,13 +47,8 @@ export component EntityListItem {
             }
         }
 
-        // Update global hover state when current-hover changes
-        changed current-hover => {
-            debug("Hover changed to: " + self.current-hover);
-            InterfaceState.hovered-entity-id = self.current-hover;
-        }
-
         clicked => {
+            debug("Entity clicked: " + root.entity-id);
             InterfaceState.selected-index = root.entity-id;
             InterfaceState.selected-title = root.title;
             InterfaceState.entity-selected(root.entity-id);

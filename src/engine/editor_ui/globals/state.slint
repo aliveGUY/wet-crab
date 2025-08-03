@@ -1,10 +1,17 @@
+import { Entity } from "../models/Entity.slint";
+import { ComponentData, KeyValuePair } from "../models/ComponentData.slint";
+
 export global InterfaceState {
     in-out property <string> selected-index: "";
     in-out property <string> selected-title: "";
     in-out property <string> selected-components;
     in-out property <string> hovered-entity-id: "";
-    in-out property <[{entity_id: string, title: string}]> entities: [];
+    in-out property <[Entity]> entities: [];
     in-out property <string> components-json: ""; // Raw JSON string for components
+    
+    // Parsed component data (populated by Rust)
+    in-out property <[ComponentData]> parsed-components: [];
+    
     callback component-changed(string /* entity_id */, string /* component_json */);
     callback entity-selected(string /* entity_id */);
     callback copy-entity(string /* entity_id */);
@@ -12,4 +19,10 @@ export global InterfaceState {
     callback entity-deselected();
     callback save-scene();
     callback spawn-blockout-platform();
+    
+    // New callback for parsing JSON components (implemented in Rust)
+    callback parse-components-json(string /* components_json */) -> [ComponentData];
+    
+    // New callback for parsing component fields (implemented in Rust)  
+    callback parse-component-fields(string /* component_type */, string /* component_data_json */) -> [KeyValuePair];
 }

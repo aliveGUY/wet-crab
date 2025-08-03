@@ -9,7 +9,7 @@ impl PhysicsSystem {
         // Query entities that have both Transform and Collider components
         query!((Transform, Collider), |current_entity_id, current_transform, current_collider| {
             for (other_entity_id, other_collider, other_transform) in &all_colliders {
-                if current_entity_id == other_entity_id {
+                if current_entity_id == *other_entity_id {
                     continue;
                 }
 

@@ -349,7 +349,7 @@ impl RenderSystem {
     ) {
         query!((Transform, StaticObject3DComponent), |entity_id, transform, static_object| {
             // Check if this entity needs an outline
-            if let Some(outline_color) = Self::get_outline_info(entity_id, selected_id, hovered_id) {
+            if let Some(outline_color) = Self::get_outline_info(&entity_id, selected_id, hovered_id) {
                 unsafe {
                     // Enable front-face culling for outline
                     gl.cull_face(glow::FRONT);

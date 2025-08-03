@@ -1,85 +1,98 @@
 {
-  "scene_name": "no_name",
-  "scene": [
-    [
-      {
-        "type": "Transform",
-        "data": {
-          "matrix": [
-            1.0, 0.0, 0.0, -0.59391,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.26602292,
-            0.0, 0.0, 0.0, 1.0
+  "ab4259fc-3229-4a65-89d6-7b019cbd2d5f": [
+    {
+      "type": "Metadata",
+      "title": "Blockout Platform",
+      "role": null
+    },
+    {
+      "type": "StaticObject3D",
+      "asset_type": "BlockoutPlatform"
+    },
+    {
+      "type": "Transform",
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        2.25,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "type": "Collider",
+      "shape": {
+        "Box": {
+          "half_extents": [
+            3.0,
+            3.0,
+            3.0
           ]
         }
       },
-      {
-        "type": "Metadata",
-        "data": {
-          "title": "Blockout Platform",
-          "role": null
+      "is_hidden": false,
+      "layer": "Environment",
+      "ignored_layers": [
+        "Environment"
+      ]
+    }
+  ],
+  "7c419164-6768-4216-8e4b-716ccead4159": [
+    {
+      "type": "Metadata",
+      "title": "Player Camera",
+      "role": "player"
+    },
+    {
+      "type": "Camera",
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
+    {
+      "type": "Transform",
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        9.833332,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "type": "Collider",
+      "shape": {
+        "Cylinder": {
+          "radius": 1.0,
+          "height": 2.0
         }
       },
-      {
-        "type": "StaticObject3D",
-        "data": {
-          "asset_type": "BlockoutPlatform"
-        }
-      },
-      {
-        "type": "Collider",
-        "data": {
-          "shape": {
-            "Box": {
-              "half_extents": [1.0, 0.1, 1.0]
-            }
-          },
-          "is_hidden": false,
-          "layer": "Environment",
-          "ignored_layers": ["Environment"]
-        }
-      }
-    ],
-    [
-      {
-        "type": "Transform",
-        "data": {
-          "matrix": [
-            1.0, 0.0, 0.0, -3.163142,
-            0.0, 1.0, 0.0, -1.3411045e-7,
-            0.0, 0.0, 1.0, 1.9337652,
-            0.0, 0.0, 0.0, 1.0
-          ]
-        }
-      },
-      {
-        "type": "Metadata",
-        "data": {
-          "title": "Player Camera",
-          "role": "player"
-        }
-      },
-      {
-        "type": "Camera",
-        "data": {
-          "pitch": 0.26289567,
-          "yaw": -11.52876
-        }
-      },
-      {
-        "type": "Collider",
-        "data": {
-          "shape": {
-            "Cylinder": {
-              "radius": 1.0,
-              "height": 2.0
-            }
-          },
-          "is_hidden": false,
-          "layer": "Player",
-          "ignored_layers": ["Player"]
-        }
-      }
-    ]
+      "is_hidden": false,
+      "layer": "Player",
+      "ignored_layers": [
+        "Player"
+      ]
+    }
   ]
 }
