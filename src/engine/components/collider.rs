@@ -82,13 +82,13 @@ struct OBB {
 /// Extracts the world-space OBB data from a Box shape and its Transform
 fn compute_world_obb(shape: &Shape, txfm: &Transform) -> OBB {
     if let Shape::Box { half_extents } = shape {
-        let matrix = txfm.get_matrix();
+        let matrix = txfm.compute_matrix();
         
         // World translation
-        let center = mat4x4_extract_translation(matrix);
+        let center = mat4x4_extract_translation(&matrix);
         
         // World scale
-        let scale = mat4x4_extract_scale(matrix);
+        let scale = mat4x4_extract_scale(&matrix);
         
         // Extract and normalize world axes from transform matrix
         let axes = [
@@ -188,8 +188,8 @@ fn collision_check_sphere_sphere(
     b_transform: Transform
 ) -> bool {
     if let (Shape::Sphere { radius: ra }, Shape::Sphere { radius: rb }) = (a_shape, b_shape) {
-        let ca = mat4x4_extract_translation(a_transform.get_matrix());
-        let cb = mat4x4_extract_translation(b_transform.get_matrix());
+        let ca = mat4x4_extract_translation(&a_transform.compute_matrix());
+        let cb = mat4x4_extract_translation(&b_transform.compute_matrix());
         let sum_radii = ra + rb;
         
         // Use squared distance to avoid sqrt
@@ -208,7 +208,7 @@ fn collision_check_box_sphere(
 ) -> bool {
     if let (Shape::Box { half_extents }, Shape::Sphere { radius }) = (box_shape, sphere_shape) {
         let obb = compute_world_obb(&Shape::Box { half_extents }, &box_transform);
-        let sphere_center = mat4x4_extract_translation(sphere_transform.get_matrix());
+        let sphere_center = mat4x4_extract_translation(&sphere_transform.compute_matrix());
         
         // Transform sphere center to box local space
         let to_sphere = [
@@ -251,9 +251,9 @@ fn collision_check_capsule_sphere(
     sphere_transform: Transform
 ) -> bool {
     if let (Shape::Capsule { radius: cap_radius, height }, Shape::Sphere { radius: sphere_radius }) = (capsule_shape, sphere_shape) {
-        let cap_center = mat4x4_extract_translation(capsule_transform.get_matrix());
-        let cap_scale = mat4x4_extract_scale(capsule_transform.get_matrix());
-        let sphere_center = mat4x4_extract_translation(sphere_transform.get_matrix());
+        let cap_center = mat4x4_extract_translation(&capsule_transform.compute_matrix());
+        let cap_scale = mat4x4_extract_scale(&capsule_transform.compute_matrix());
+        let sphere_center = mat4x4_extract_translation(&sphere_transform.compute_matrix());
         
         // Capsule segment endpoints (assuming Y-axis alignment)
         let half_height = height * 0.5 * cap_scale[1];
@@ -277,10 +277,10 @@ fn collision_check_capsule_capsule(
     b_transform: Transform
 ) -> bool {
     if let (Shape::Capsule { radius: ra, height: ha }, Shape::Capsule { radius: rb, height: hb }) = (a_shape, b_shape) {
-        let ca = mat4x4_extract_translation(a_transform.get_matrix());
-        let sa = mat4x4_extract_scale(a_transform.get_matrix());
-        let cb = mat4x4_extract_translation(b_transform.get_matrix());
-        let sb = mat4x4_extract_scale(b_transform.get_matrix());
+        let ca = mat4x4_extract_translation(&a_transform.compute_matrix());
+        let sa = mat4x4_extract_scale(&a_transform.compute_matrix());
+        let cb = mat4x4_extract_translation(&b_transform.compute_matrix());
+        let sb = mat4x4_extract_scale(&b_transform.compute_matrix());
         
         // Capsule A segment endpoints
         let half_ha = ha * 0.5 * sa[1];
@@ -309,9 +309,9 @@ fn collision_check_cylinder_sphere(
     sphere_transform: Transform
 ) -> bool {
     if let (Shape::Cylinder { radius: cyl_radius, height }, Shape::Sphere { radius: sphere_radius }) = (cylinder_shape, sphere_shape) {
-        let cyl_center = mat4x4_extract_translation(cylinder_transform.get_matrix());
-        let cyl_scale = mat4x4_extract_scale(cylinder_transform.get_matrix());
-        let sphere_center = mat4x4_extract_translation(sphere_transform.get_matrix());
+        let cyl_center = mat4x4_extract_translation(&cylinder_transform.compute_matrix());
+        let cyl_scale = mat4x4_extract_scale(&cylinder_transform.compute_matrix());
+        let sphere_center = mat4x4_extract_translation(&sphere_transform.compute_matrix());
         
         // Cylinder segment endpoints (assuming Y-axis alignment)
         let half_height = height * 0.5 * cyl_scale[1];
@@ -336,8 +336,8 @@ fn collision_check_box_capsule(
 ) -> bool {
     if let (Shape::Box { half_extents }, Shape::Capsule { radius, height }) = (box_shape, capsule_shape) {
         let obb = compute_world_obb(&Shape::Box { half_extents }, &box_transform);
-        let cap_center = mat4x4_extract_translation(capsule_transform.get_matrix());
-        let cap_scale = mat4x4_extract_scale(capsule_transform.get_matrix());
+        let cap_center = mat4x4_extract_translation(&capsule_transform.compute_matrix());
+        let cap_scale = mat4x4_extract_scale(&capsule_transform.compute_matrix());
         
         // Capsule segment endpoints
         let half_height = height * 0.5 * cap_scale[1];
@@ -406,10 +406,10 @@ fn collision_check_cylinder_cylinder(
     b_transform: Transform
 ) -> bool {
     if let (Shape::Cylinder { radius: ra, height: ha }, Shape::Cylinder { radius: rb, height: hb }) = (a_shape, b_shape) {
-        let ca = mat4x4_extract_translation(a_transform.get_matrix());
-        let sa = mat4x4_extract_scale(a_transform.get_matrix());
-        let cb = mat4x4_extract_translation(b_transform.get_matrix());
-        let sb = mat4x4_extract_scale(b_transform.get_matrix());
+        let ca = mat4x4_extract_translation(&a_transform.compute_matrix());
+        let sa = mat4x4_extract_scale(&a_transform.compute_matrix());
+        let cb = mat4x4_extract_translation(&b_transform.compute_matrix());
+        let sb = mat4x4_extract_scale(&b_transform.compute_matrix());
         
         // Cylinder A segment endpoints
         let half_ha = ha * 0.5 * sa[1];
@@ -438,10 +438,10 @@ fn collision_check_capsule_cylinder(
     cylinder_transform: Transform
 ) -> bool {
     if let (Shape::Capsule { radius: cap_radius, height: cap_height }, Shape::Cylinder { radius: cyl_radius, height: cyl_height }) = (capsule_shape, cylinder_shape) {
-        let cap_center = mat4x4_extract_translation(capsule_transform.get_matrix());
-        let cap_scale = mat4x4_extract_scale(capsule_transform.get_matrix());
-        let cyl_center = mat4x4_extract_translation(cylinder_transform.get_matrix());
-        let cyl_scale = mat4x4_extract_scale(cylinder_transform.get_matrix());
+        let cap_center = mat4x4_extract_translation(&capsule_transform.compute_matrix());
+        let cap_scale = mat4x4_extract_scale(&capsule_transform.compute_matrix());
+        let cyl_center = mat4x4_extract_translation(&cylinder_transform.compute_matrix());
+        let cyl_scale = mat4x4_extract_scale(&cylinder_transform.compute_matrix());
         
         // Capsule segment endpoints
         let cap_half_height = cap_height * 0.5 * cap_scale[1];

@@ -52,7 +52,7 @@ export component LevelEditorUI inherits Window {
                 // Iterate over each component type and create separate editors
                 for component in InterfaceState.parsed-components: ComponentListItem {
                     title: component.component-type;
-                    fields: InterfaceState.selected-component-fields;
+                    fields: component.fields;
                     entity-id: InterfaceState.selected-index;
                     component-json: component.data-json;
                 }

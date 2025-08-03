@@ -93,14 +93,12 @@ impl SystemTrait for MovementSystem {
             total_movement[1] *= movement_distance;
             total_movement[2] *= movement_distance;
             
-            // Apply to transform
-            let translation_matrix = mat4x4_translate(
+            // Apply to transform using the new component-based approach
+            transform.translate(
                 total_movement[0], 
                 total_movement[1], 
                 total_movement[2]
             );
-            let new_matrix = mat4x4_mul(translation_matrix, *transform.get_matrix());
-            *transform.get_matrix_mut() = new_matrix;
         });
     }
 }

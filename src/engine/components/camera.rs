@@ -22,7 +22,7 @@ impl Camera {
         let mut position = [0.0, 0.0, 0.0];
         let entity_id_string = entity_id.to_string();
         crate::query_by_id!(entity_id_string, (Transform), |transform| {
-            let translation = mat4x4_extract_translation(transform.get_matrix());
+            let translation = mat4x4_extract_translation(&transform.compute_matrix());
             position = translation;
         });
 

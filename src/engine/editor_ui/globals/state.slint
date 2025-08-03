@@ -12,8 +12,7 @@ export global InterfaceState {
     // Parsed component data (populated by Rust)
     in-out property <[ComponentData]> parsed-components: [];
     
-    // Flat key-value pairs for selected entity's components
-    in-out property <[KeyValuePair]> selected-component-fields: [];
+    // Note: selected-component-fields removed - now using individual component.fields
     
     callback component-changed(string /* entity_id */, string /* component_json */);
     callback entity-selected(string /* entity_id */);
