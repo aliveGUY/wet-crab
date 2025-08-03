@@ -1,47 +1,38 @@
 import { Colors } from "../globals/colors.slint";
 import { Textfield } from "../common/textfield.slint";
-import { ComponentUI } from "../models/ComponentUI.slint";
-import { AttributeUI } from "../models/AttributeUI.slint";
 import { InterfaceState } from "../globals/state.slint";
+import { ComponentData, KeyValuePair } from "../models/ComponentData.slint";
 
 export component ComponentListItem {
-    in property <ComponentUI> component;
+    in property <string> component-json;
     in property <string> entity-id;
-    
-    // Internal state to track component changes
-    property <ComponentUI> internal-component: component;
-    
-    // Function to trigger component change callback
-    function trigger-component-change() {
-        if (entity-id != "" && internal-component.name != "") {
-            InterfaceState.component-changed(entity-id, internal-component.name, internal-component);
-        }
-    }
-    
+    in property <string> title;
+    in property <[KeyValuePair]> fields;
+
     Rectangle {
         border-radius: 6px;
         background: Colors.card-background;
 
         VerticalLayout {
-            padding-top: 12px;
-            padding-bottom: 12px;
+            padding: 12px;
+            spacing: 8px;
+            
             Text {
-                text: component.name;
+                text: title;
                 font-size: 16px;
+                font-weight: 700;
                 width: 100%;
                 horizontal-alignment: center;
+                color: Colors.text-color;
             }
-
-            for attributes[index] in component.attributes: Textfield {
-                label: attributes.name;
-                value: attributes.value;
-                
-                // Handle attribute changes by updating internal component and triggering callback
-                changed value => {
-                    // Update the internal component's attribute
-                    internal-component.attributes[index].value = self.value;
-                    // Trigger the component-level change
-                    root.trigger-component-change();
+            
+            // Component-specific fields editor
+            for pair in fields: Textfield {
+                label: pair.key;
+                value: pair.value;
+                value-changed(field_key, new_value) => {
+                    // Request component JSON update from Rust
+                    InterfaceState.update-component-field(root.entity-id, root.title, field_key, new_value);
                 }
             }
         }

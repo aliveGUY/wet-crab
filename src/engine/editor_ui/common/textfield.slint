@@ -3,6 +3,7 @@ import { Colors } from "../globals/colors.slint";
 export component Textfield {
     in property <string> label;
     in-out property <string> value;
+    callback value-changed(string /* field_key */, string /* new_value */);
 
     VerticalLayout {
         padding: 12px;
@@ -29,6 +30,9 @@ export component Textfield {
                     text <=> root.value;
                     vertical-alignment: center;
                     font-size: 16px;
+                    edited => {
+                        root.value-changed(root.label, self.text);
+                    }
                 }
             }
         }

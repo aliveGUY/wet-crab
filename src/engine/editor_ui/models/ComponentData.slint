@@ -1,0 +1,12 @@
+// Model for key-value pairs within component data
+export struct KeyValuePair {
+    key: string,
+    value: string,
+}
+
+// Model for individual component data
+export struct ComponentData {
+    component_type: string,
+    data_json: string,
+    fields: [KeyValuePair],
+}
