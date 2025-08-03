@@ -1,241 +1,207 @@
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
-use std::collections::HashMap;
-use std::any::TypeId;
-use slint::{ ComponentHandle, Weak, SharedString, VecModel, ModelRc, Model };
-use crate::{ copy_entity, delete_entity, ComponentUI, InterfaceState, LevelEditorUI };
-use crate::{ query_get_all, get_all_components_by_id };
-use crate::index::engine::components::{ Metadata, Transform, Collider };
+use crate::index::engine::systems::entity_component_system::WORLD;
+use crate::index::engine::components::{Metadata, Transform, Collider};
 use crate::index::engine::components::camera::Camera;
 use crate::index::engine::components::static_object3d::StaticObject3D;
-use crate::index::engine::components::animated_object3d::AnimatedObject3D;
-use crate::index::engine::systems::entity_component_system::WORLD;
-use crate::index::game::entities::blockout_platform::spawn_blockout_platform;
-use crate::index::engine::systems::serialization::try_save_world;
+use crate::{
+    copy_entity, delete_entity, LevelEditorUI, InterfaceState
+};
+use crate::{query_get_all};
+use slint::{VecModel, ModelRc, ComponentHandle};
 
 pub struct InterfaceSystem {
-    ui_handle: Weak<LevelEditorUI>,
+    ui: LevelEditorUI,
 }
 
-// Component type mapping for dynamic lookup
-static COMPONENT_TYPE_MAP: Lazy<HashMap<&'static str, TypeId>> = Lazy::new(|| {
-    let mut m = HashMap::new();
-    m.insert("Metadata", TypeId::of::<Metadata>());
-    m.insert("Transform", TypeId::of::<Transform>());
-    m.insert("Camera", TypeId::of::<Camera>());
-    m.insert("Static Object 3D", TypeId::of::<StaticObject3D>());
-    m.insert("Animated Object 3D", TypeId::of::<AnimatedObject3D>());
-    m.insert("Collider", TypeId::of::<Collider>());
-    m
-});
-
-static INTERFACE_SYSTEM: Lazy<Mutex<Option<InterfaceSystem>>> = Lazy::new(|| Mutex::new(None));
-
 impl InterfaceSystem {
-    /// Handle component changes from UI - now uses dynamic lookup instead of hardcoded match!
-    pub fn handle_component_change(
-        entity_id: String,
-        component_name: String,
-        updated_component: ComponentUI
-    ) {
-        // Dynamic component lookup using TypeId and StoreDyn - no more hardcoded match!
-        if let Some(&type_id) = COMPONENT_TYPE_MAP.get(component_name.as_str()) {
-            WORLD.with(|w| {
-                let mut world = w.borrow_mut();
-                if world.apply_component_ui_by_type(&entity_id, &type_id, &updated_component) {
-                    println!(
-                        "✅ Applied UI changes to {} component for entity {}",
-                        component_name,
-                        entity_id
-                    );
-                } else {
-                    println!("⚠️ No store found for component type: {}", component_name);
-                }
-            });
-        } else {
-            println!("⚠️ Unknown component type: {}", component_name);
-        }
-    }
-
-    /// Create a new InterfaceSystem instance
-    pub fn new(ui_context: &LevelEditorUI) -> Self {
-        let ui_handle = ui_context.as_weak();
-
-        let system = Self {
-            ui_handle,
-        };
-
+    pub fn new() -> Self {
+        let ui = LevelEditorUI::new().unwrap();
+        
         // Set up callbacks
-        let state = ui_context.global::<InterfaceState>();
-
-        // Set up component change callback
-        state.on_component_changed({
-            move |entity_id, component_name, updated_component| {
-                Self::handle_component_change(
-                    entity_id.to_string(),
-                    component_name.to_string(),
-                    updated_component
-                );
-            }
-        });
-
-        // Set up entity selection callback
+        let state = ui.global::<InterfaceState>();
+        
+        // Entity selection callback
+        let ui_weak = ui.as_weak();
         state.on_entity_selected({
             move |entity_id| {
-                Self::handle_entity_selected(entity_id.to_string());
-            }
-        });
-
-        // Set up entity deselection callback
-        state.on_entity_deselected({
-            move || {
-                Self::handle_entity_deselected();
-            }
-        });
-
-        state.on_save_scene({
-            move || {
-                match try_save_world("src/assets/scenes/test_world.json") {
-                    Ok(()) => {
-                        println!("✅ ECS state saved to: src/assets/scenes/test_world.json");
+                println!("🎯 Entity selected: {}", entity_id);
+                
+                let (title, components_json) = WORLD.with(|w| {
+                    let world = w.borrow();
+                    
+                    // Get entity metadata for title
+                    let title = world.get_component_readonly::<Metadata>(&entity_id.to_string())
+                        .map(|metadata| metadata.title().to_string())
+                        .unwrap_or_else(|| "Unknown Entity".to_string());
+                    
+                    // Collect all components for this entity and serialize them
+                    let mut components = Vec::new();
+                    let entity_id_str = entity_id.to_string();
+                    
+                    // Check for Transform component
+                    if let Some(transform) = world.get_component_readonly::<Transform>(&entity_id_str) {
+                        if let Ok(data) = serde_json::to_value(transform) {
+                            components.push(serde_json::json!({
+                                "type": "Transform",
+                                "data": data
+                            }));
+                        }
                     }
-                    Err(err) => {
-                        eprintln!("❌ Failed to save ECS state: {}", err);
+                    
+                    // Check for Metadata component
+                    if let Some(metadata) = world.get_component_readonly::<Metadata>(&entity_id_str) {
+                        if let Ok(data) = serde_json::to_value(metadata) {
+                            components.push(serde_json::json!({
+                                "type": "Metadata", 
+                                "data": data
+                            }));
+                        }
                     }
+                    
+                    // Check for Camera component
+                    if let Some(camera) = world.get_component_readonly::<Camera>(&entity_id_str) {
+                        if let Ok(data) = serde_json::to_value(camera) {
+                            components.push(serde_json::json!({
+                                "type": "Camera",
+                                "data": data
+                            }));
+                        }
+                    }
+                    
+                    // Check for Collider component
+                    if let Some(collider) = world.get_component_readonly::<Collider>(&entity_id_str) {
+                        if let Ok(data) = serde_json::to_value(collider) {
+                            components.push(serde_json::json!({
+                                "type": "Collider",
+                                "data": data
+                            }));
+                        }
+                    }
+                    
+                    // Check for StaticObject3D component
+                    if let Some(static_obj) = world.get_component_readonly::<StaticObject3D>(&entity_id_str) {
+                        if let Ok(data) = serde_json::to_value(static_obj) {
+                            components.push(serde_json::json!({
+                                "type": "StaticObject3D",
+                                "data": data
+                            }));
+                        }
+                    }
+                    
+                    // Serialize all components as JSON array
+                    let components_json = serde_json::to_string_pretty(&components)
+                        .unwrap_or_else(|_| "[]".to_string());
+                    
+                    (title, components_json)
+                });
+                
+                // Update UI state
+                if let Some(ui) = ui_weak.upgrade() {
+                    let state = ui.global::<InterfaceState>();
+                    state.set_selected_index(entity_id);
+                    state.set_selected_title(title.into());
+                    state.set_components_json(components_json.into());
                 }
             }
         });
 
-        state.on_spawn_blockout_platform({
-            move || {
-                spawn_blockout_platform();
-                Self::update_entity_tree_global();
-                println!("🏗️ Spawned new blockout platform");
+        // Component change callback - simplified to just handle JSON
+        state.on_component_changed({
+            move |entity_id, component_json| {
+                println!("🔧 Component changed for entity {}: {}", entity_id, component_json);
+                // TODO: Parse JSON and update component data
             }
         });
 
+        // Entity deselection callback
+        state.on_entity_deselected({
+            move || {
+                println!("🎯 Entity deselected");
+            }
+        });
+
+        // Copy entity callback
         state.on_copy_entity({
             move |entity_id| {
+                println!("📋 Copying entity: {}", entity_id);
                 if let Some(new_entity_id) = copy_entity!(entity_id.to_string()) {
                     println!("✅ Entity copied: {} -> {}", entity_id, new_entity_id);
-                    Self::update_entity_tree_global();
                 } else {
                     println!("❌ Failed to copy entity: {}", entity_id);
                 }
             }
         });
 
+        // Delete entity callback
         state.on_delete_entity({
             move |entity_id| {
+                println!("🗑️ Deleting entity: {}", entity_id);
                 if delete_entity!(entity_id.to_string()) {
                     println!("✅ Entity deleted: {}", entity_id);
-                    Self::update_entity_tree_global();
                 } else {
                     println!("❌ Failed to delete entity: {}", entity_id);
                 }
             }
         });
 
-        system
-    }
-
-    /// Handle entity selection - load and populate components
-    pub fn handle_entity_selected(entity_id: String) {
-        println!("🎯 Entity selected: {}", entity_id);
-
-        // Load components for this entity
-        let components_ui = get_all_components_by_id!(entity_id);
-        Self::populate_components_ui(components_ui);
-    }
-
-    /// Handle entity deselection - clear components
-    pub fn handle_entity_deselected() {
-        println!("❌ Entity deselected - clearing components");
-
-        // Clear components UI
-        Self::clear_components_ui();
-    }
-
-    /// Populate components in UI
-    fn populate_components_ui(components: Vec<ComponentUI>) {
-        if let Some(ref system) = INTERFACE_SYSTEM.lock().unwrap().as_ref() {
-            system.update_ui_components(components);
-        }
-    }
-
-    /// Clear components from UI
-    fn clear_components_ui() {
-        if let Some(ref system) = INTERFACE_SYSTEM.lock().unwrap().as_ref() {
-            system.update_ui_components(Vec::new()); // Empty components list
-        }
-    }
-
-    /// Update the UI with component data - direct pass-through, no conversion needed
-    fn update_ui_components(&self, components: Vec<ComponentUI>) {
-        let ui = match self.ui_handle.upgrade() {
-            Some(ui) => ui,
-            None => {
-                return;
+        // Save scene callback
+        state.on_save_scene({
+            move || {
+                println!("💾 Saving scene...");
+                crate::save_world!("src/assets/scenes/test_world.json");
             }
-        };
+        });
 
-        // No conversion needed - components already return Slint ComponentUI
-        let state = ui.global::<InterfaceState>();
-        let components_model = VecModel::from(components);
-        state.set_components(ModelRc::new(components_model).into());
+        // Spawn blockout platform callback
+        state.on_spawn_blockout_platform({
+            move || {
+                println!("🏗️ Spawning blockout platform...");
+                crate::index::game::entities::spawn_blockout_platform();
+            }
+        });
+
+        Self { ui }
     }
 
-    /// Update the entity tree
-    pub fn update_entity_tree(&self) {
-        let ui = match self.ui_handle.upgrade() {
-            Some(ui) => ui,
-            None => {
-                return;
-            }
-        };
-
-        let state = ui.global::<InterfaceState>();
-        let all_entities_with_metadata = query_get_all!(Metadata);
-
-        let entities_model: VecModel<(SharedString, SharedString)> = VecModel::default();
-
-        for (entity_id, metadata) in all_entities_with_metadata {
-            let entity_data = (SharedString::from(entity_id), SharedString::from(metadata.title()));
-            entities_model.push(entity_data);
+    pub fn update(&self) {
+        // Update entity list
+        let metadata_results = query_get_all!(Metadata);
+        let mut entities = Vec::new();
+        
+        for (entity_id, metadata) in metadata_results {
+            // For now, create a simple tuple - we'll need to define a proper struct later
+            entities.push((entity_id.into(), metadata.title().into()));
         }
-
-        let entity_count = entities_model.row_count();
+        
+        let entities_model = VecModel::from(entities);
+        let state = self.ui.global::<InterfaceState>();
         state.set_entities(ModelRc::new(entities_model).into());
-
-        println!("Updated entity tree with {} entities", entity_count);
     }
 
-    // Static methods for backward compatibility with existing code
-
-    /// Initialize the global InterfaceSystem instance (replaces old initialize method)
-    pub fn initialize(ui_context: &LevelEditorUI) {
-        let system = Self::new(ui_context);
-        *INTERFACE_SYSTEM.lock().unwrap() = Some(system);
+    pub fn run(&self) -> Result<(), slint::PlatformError> {
+        self.ui.run()
     }
 
-    /// Update the entity tree using the global instance (static method)
-    pub fn update_entity_tree_global() {
-        if let Some(ref system) = INTERFACE_SYSTEM.lock().unwrap().as_ref() {
-            system.update_entity_tree();
-        }
+    pub fn show(&self) -> Result<(), slint::PlatformError> {
+        self.ui.show()
     }
 
-    /// Get the current selection and hover state from the interface
+    pub fn hide(&self) -> Result<(), slint::PlatformError> {
+        self.ui.hide()
+    }
+
+    // Add missing static methods that other parts of the codebase expect
     pub fn get_selection_state() -> (String, String) {
-        if let Some(ref system) = INTERFACE_SYSTEM.lock().unwrap().as_ref() {
-            if let Some(ui) = system.ui_handle.upgrade() {
-                let state = ui.global::<InterfaceState>();
-                let selected = state.get_selected_index().to_string();
-                let hovered = state.get_hovered_entity_id().to_string();
-
-                return (selected, hovered);
-            }
-        }
+        // Return empty selection state for now
         ("".to_string(), "".to_string())
+    }
+
+    pub fn update_entity_tree_global() {
+        // Static method for updating entity tree - placeholder for now
+        println!("🔄 Updating entity tree globally");
+    }
+
+    pub fn initialize(_ui_app: &LevelEditorUI) {
+        // Static initialization method - placeholder for now
+        println!("🚀 Initializing interface system");
     }
 }

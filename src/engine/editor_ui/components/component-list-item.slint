@@ -1,20 +1,15 @@
 import { Colors } from "../globals/colors.slint";
 import { Textfield } from "../common/textfield.slint";
-import { ComponentUI } from "../models/ComponentUI.slint";
-import { AttributeUI } from "../models/AttributeUI.slint";
 import { InterfaceState } from "../globals/state.slint";
 
 export component ComponentListItem {
-    in property <ComponentUI> component;
+    in property <string> component-json;
     in property <string> entity-id;
-    
-    // Internal state to track component changes
-    property <ComponentUI> internal-component: component;
     
     // Function to trigger component change callback
     function trigger-component-change() {
-        if (entity-id != "" && internal-component.name != "") {
-            InterfaceState.component-changed(entity-id, internal-component.name, internal-component);
+        if (entity-id != "" && component-json != "") {
+            InterfaceState.component-changed(entity-id, component-json);
         }
     }
     
@@ -25,24 +20,45 @@ export component ComponentListItem {
         VerticalLayout {
             padding-top: 12px;
             padding-bottom: 12px;
+            
             Text {
-                text: component.name;
-                font-size: 16px;
+                text: "Components";
+                font-size: 18px;
+                font-weight: 700;
                 width: 100%;
                 horizontal-alignment: center;
+                color: Colors.text-color;
             }
 
-            for attributes[index] in component.attributes: Textfield {
-                label: attributes.name;
-                value: attributes.value;
+            // For now, display the JSON in a scrollable text area
+            // TODO: Parse JSON and create dynamic fields for each component
+            Rectangle {
+                height: 400px;
+                border-width: 1px;
+                border-color: Colors.input-border;
+                border-radius: 4px;
+                background: Colors.input-background;
                 
-                // Handle attribute changes by updating internal component and triggering callback
-                changed value => {
-                    // Update the internal component's attribute
-                    internal-component.attributes[index].value = self.value;
-                    // Trigger the component-level change
-                    root.trigger-component-change();
+                TextInput {
+                    text: component-json;
+                    font-family: "monospace";
+                    font-size: 11px;
+                    wrap: word-wrap;
+                    color: Colors.text-color;
+                    
+                    edited => {
+                        root.trigger-component-change();
+                    }
                 }
+            }
+            
+            Text {
+                text: "Note: This will be replaced with dynamic component fields";
+                font-size: 10px;
+                color: #888;
+                width: 100%;
+                horizontal-alignment: center;
+                wrap: word-wrap;
             }
         }
     }

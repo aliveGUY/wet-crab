@@ -1,17 +1,15 @@
 use std::{ any::{ Any, TypeId }, collections::HashMap, cell::RefCell };
 use uuid::Uuid;
 
-pub trait Component: Any {
-    fn apply_ui(&mut self, component_ui: &crate::ComponentUI);
-    fn update_component_ui(&mut self, entity_id: &str);
-    fn get_component_ui(&self) -> std::rc::Rc<std::cell::RefCell<crate::ComponentUI>>;
+pub trait Component: Any + Send + Sync {
+    // Components now only need to implement the Any trait
+    // All serialization is handled by serde derives
 }
 
+// Blanket implementation for all types that are Any + Send + Sync
+impl<T> Component for T where T: Any + Send + Sync {}
+
 pub trait StoreDyn: Any {
-    fn get_component_ui_for_entity(&self, id: &EntityId) -> Option<crate::ComponentUI>;
-
-    fn apply_component_ui(&mut self, id: &EntityId, ui_data: &crate::ComponentUI);
-
     fn remove_component(&mut self, id: &EntityId) -> bool;
 
     fn clone_component(&mut self, source_id: &EntityId, target_id: &EntityId) -> bool;
@@ -70,23 +68,8 @@ impl<T: Component> Store<T> {
     }
 }
 
-// Implement StoreDyn for Store<T> to enable dynamic ComponentUI collection
+// Implement StoreDyn for Store<T>
 impl<T: Component + Clone + 'static> StoreDyn for Store<T> {
-    fn get_component_ui_for_entity(&self, id: &EntityId) -> Option<crate::ComponentUI> {
-        // If this entity has a T component, get its UI state
-        self.0.get(id).map(|component| {
-            // Get the ComponentUI (Rc<RefCell<...>>), borrow it, and clone the inner data
-            component.get_component_ui().borrow().clone()
-        })
-    }
-
-    fn apply_component_ui(&mut self, id: &EntityId, ui_data: &crate::ComponentUI) {
-        // If this entity has a T component, apply the UI changes to it
-        if let Some(component) = self.0.get_mut(id) {
-            component.apply_ui(ui_data);
-        }
-    }
-
     fn remove_component(&mut self, id: &EntityId) -> bool {
         self.0.remove(id).is_some()
     }
@@ -425,37 +408,6 @@ impl World {
         results
     }
 
-    /// Get all components for a specific entity as ComponentUI - Dynamic implementation using StoreDyn
-    pub fn get_all_components_ui_for_entity(
-        &self,
-        entity_id: &EntityId
-    ) -> Vec<crate::ComponentUI> {
-        let mut ui_components = Vec::new();
-        if let Some(_mask) = self.meta.get(entity_id) {
-            // Iterate over all component stores and collect UI for this entity
-            for store in self.stores.values() {
-                if let Some(component_ui) = store.get_component_ui_for_entity(entity_id) {
-                    ui_components.push(component_ui);
-                }
-            }
-        }
-        ui_components
-    }
-
-    /// Apply ComponentUI changes to a component dynamically using TypeId lookup
-    pub fn apply_component_ui_by_type(
-        &mut self,
-        entity_id: &EntityId,
-        type_id: &TypeId,
-        ui_data: &crate::ComponentUI
-    ) -> bool {
-        if let Some(store) = self.stores.get_mut(type_id) {
-            store.apply_component_ui(entity_id, ui_data);
-            true
-        } else {
-            false
-        }
-    }
 
     /// Get all entity IDs and their component masks for serialization
     pub fn get_all_entities(&self) -> impl Iterator<Item = (&EntityId, &ComponentMask)> {
@@ -622,17 +574,6 @@ macro_rules! query_get_all_ids {
     };
 }
 
-#[macro_export]
-macro_rules! get_all_components_by_id {
-    ($eid:expr) => {
-        {
-            crate::index::engine::systems::entity_component_system::WORLD.with(|w| {
-                let world = w.borrow();
-                world.get_all_components_ui_for_entity(&$eid)
-            })
-        }
-    };
-}
 
 // Copy entity macro - returns Option<EntityId>
 #[macro_export]

@@ -1,7 +1,6 @@
 // Import types and functions from parent scope
 use crate::index::engine::components::{SystemTrait, CameraComponent, Transform};
 use crate::index::engine::systems::event_system::Event;
-use crate::index::engine::Component; // Import Component trait for update_component_ui
 use crate::index::engine::utils::math::{mat4x4_translate, mat4x4_mul};
 use crate::index::PLAYER_ENTITY_ID;
 
@@ -25,7 +24,6 @@ impl SystemTrait for CameraRotationSystem {
 
         crate::query_by_id!(player_entity_id, (CameraComponent), |camera| {
             camera.add_rotation_delta(pitch_delta, yaw_delta);
-            camera.update_component_ui(&player_entity_id); // Update UI after component change
         });
     }
 }
@@ -103,10 +101,6 @@ impl SystemTrait for MovementSystem {
             );
             let new_matrix = mat4x4_mul(translation_matrix, *transform.get_matrix());
             *transform.get_matrix_mut() = new_matrix;
-            
-            // Update UI
-            transform.update_component_ui(&player_entity_id);
-            camera.update_component_ui(&player_entity_id);
         });
     }
 }

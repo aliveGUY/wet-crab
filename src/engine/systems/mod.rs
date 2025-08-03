@@ -1,6 +1,7 @@
 pub mod event_system;
 pub mod keyboard_input_system;
 pub mod interface_system;
+pub mod scene_format;
 pub mod serialization;
 #[macro_use]
 pub mod entity_component_system;

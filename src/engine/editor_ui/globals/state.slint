@@ -1,13 +1,11 @@
-import { ComponentUI } from "../models/ComponentUI.slint";
-
 export global InterfaceState {
     in-out property <string> selected-index: "";
     in-out property <string> selected-title: "";
     in-out property <string> selected-components;
     in-out property <string> hovered-entity-id: "";
     in-out property <[{entity_id: string, title: string}]> entities: [];
-    in-out property <[ComponentUI]> components: [];
-    callback component-changed(string /* entity_id */, string /* component_name */, ComponentUI /* updated_component */);
+    in-out property <string> components-json: ""; // Raw JSON string for components
+    callback component-changed(string /* entity_id */, string /* component_json */);
     callback entity-selected(string /* entity_id */);
     callback copy-entity(string /* entity_id */);
     callback delete-entity(string /* entity_id */);

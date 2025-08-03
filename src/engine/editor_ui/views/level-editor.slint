@@ -48,8 +48,8 @@ export component LevelEditorUI inherits Window {
                     color: Colors.card-background-selected;
                 }
 
-                for component in InterfaceState.components: ComponentListItem {
-                    component: component;
+                ComponentListItem {
+                    component-json: InterfaceState.components-json;
                     entity-id: InterfaceState.selected-index;
                 }
             }
