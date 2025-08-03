@@ -13,10 +13,11 @@ pub mod skeleton;
 pub mod static_object3d;
 pub mod system;
 pub mod transform;
+pub mod rigid_body;
 
 // Re-export commonly used types for convenience
 pub use camera::Camera as CameraComponent;
-pub use collider::{Collider, ColliderLayer};
+pub use collider::{ Collider, ColliderLayer };
 pub use component_types::ComponentType;
 pub use metadata::Metadata;
 pub use shapes::Shape;

@@ -1,3 +1,4 @@
+use crate::index::engine::components::rigid_body::RigidBody;
 use crate::index::engine::systems::{ spawn, EntityId };
 use crate::index::engine::components::{
     CameraComponent,
@@ -21,7 +22,8 @@ pub fn spawn_player() -> EntityId {
             Shape::Cylinder { radius: 1.0, height: 2.0 },
             ColliderLayer::Player,
             vec![ColliderLayer::Player]
-        )
+        ),
+        RigidBody::new()
     );
 
     player_entity_id

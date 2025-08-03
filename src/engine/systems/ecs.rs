@@ -1,15 +1,20 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 use once_cell::sync::Lazy;
-use serde::{Serialize, Deserialize};
+use serde::{ Serialize, Deserialize };
 use uuid::Uuid;
 
 // Import all component types
 use crate::index::engine::components::{
-    Transform, Metadata, CameraComponent as Camera, Collider, Shape,
-    AnimatedObject3DComponent as AnimatedObject3D, StaticObject3DComponent as StaticObject3D,
+    rigid_body::RigidBody,
+    AnimatedObject3DComponent as AnimatedObject3D,
+    CameraComponent as Camera,
+    Collider,
+    Metadata,
+    Shape,
+    StaticObject3DComponent as StaticObject3D,
+    Transform,
 };
-
 
 pub type EntityId = String;
 
@@ -26,13 +31,15 @@ pub enum Component {
     StaticObject3D(StaticObject3D),
     AnimatedObject3D(AnimatedObject3D),
     Shape(Shape),
+    RigidBody(RigidBody),
 }
 
 // ——————————————————————————————————————————————————————————— Global Singleton ————
 
 /// Global component map singleton - HashMap<EntityId, Vec<Component>>
-static COMPONENT_MAP: Lazy<RwLock<HashMap<String, Vec<Component>>>> = 
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static COMPONENT_MAP: Lazy<RwLock<HashMap<String, Vec<Component>>>> = Lazy::new(||
+    RwLock::new(HashMap::new())
+);
 
 // ——————————————————————————————————————————————————————————— Core API ————
 
@@ -45,10 +52,7 @@ pub fn spawn() -> EntityId {
 }
 
 /// Insert a component into an entity
-pub fn insert<T>(entity_id: &EntityId, component: T) 
-where 
-    T: Into<Component> + Clone
-{
+pub fn insert<T>(entity_id: &EntityId, component: T) where T: Into<Component> + Clone {
     let mut map = COMPONENT_MAP.write().unwrap();
     if let Some(components) = map.get_mut(entity_id) {
         // Remove existing component of the same type if it exists
@@ -59,11 +63,7 @@ where
 }
 
 /// Get a component from an entity (read-only)
-pub fn get_component<T>(entity_id: &EntityId) -> Option<T>
-where
-    T: Clone,
-    Component: TryInto<T>,
-{
+pub fn get_component<T>(entity_id: &EntityId) -> Option<T> where T: Clone, Component: TryInto<T> {
     let map = COMPONENT_MAP.read().unwrap();
     if let Some(components) = map.get(entity_id) {
         for component in components {
@@ -77,10 +77,7 @@ where
 
 /// Get a mutable reference to a component (requires write lock)
 pub fn get_component_mut<T, F, R>(entity_id: &EntityId, f: F) -> Option<R>
-where
-    T: Clone,
-    Component: TryInto<T> + From<T>,
-    F: FnOnce(&mut T) -> R,
+    where T: Clone, Component: TryInto<T> + From<T>, F: FnOnce(&mut T) -> R
 {
     let mut map = COMPONENT_MAP.write().unwrap();
     if let Some(components) = map.get_mut(entity_id) {
@@ -96,14 +93,10 @@ where
 }
 
 /// Query all entities with a specific component type
-pub fn query_all<T>() -> Vec<(EntityId, T)>
-where
-    T: Clone,
-    Component: TryInto<T>,
-{
+pub fn query_all<T>() -> Vec<(EntityId, T)> where T: Clone, Component: TryInto<T> {
     let map = COMPONENT_MAP.read().unwrap();
     let mut results = Vec::new();
-    
+
     for (entity_id, components) in map.iter() {
         for component in components {
             if let Ok(typed_component) = component.clone().try_into() {
@@ -112,24 +105,21 @@ where
             }
         }
     }
-    
+
     results
 }
 
 /// Query all entities with two specific component types
 pub fn query_all2<T1, T2>() -> Vec<(EntityId, T1, T2)>
-where
-    T1: Clone,
-    T2: Clone,
-    Component: TryInto<T1> + TryInto<T2>,
+    where T1: Clone, T2: Clone, Component: TryInto<T1> + TryInto<T2>
 {
     let map = COMPONENT_MAP.read().unwrap();
     let mut results = Vec::new();
-    
+
     for (entity_id, components) in map.iter() {
         let mut comp1: Option<T1> = None;
         let mut comp2: Option<T2> = None;
-        
+
         for component in components {
             if comp1.is_none() {
                 if let Ok(typed_component) = component.clone().try_into() {
@@ -144,31 +134,27 @@ where
                 }
             }
         }
-        
+
         if let (Some(c1), Some(c2)) = (comp1, comp2) {
             results.push((entity_id.clone(), c1, c2));
         }
     }
-    
+
     results
 }
 
 /// Query all entities with three specific component types
 pub fn query_all3<T1, T2, T3>() -> Vec<(EntityId, T1, T2, T3)>
-where
-    T1: Clone,
-    T2: Clone,
-    T3: Clone,
-    Component: TryInto<T1> + TryInto<T2> + TryInto<T3>,
+    where T1: Clone, T2: Clone, T3: Clone, Component: TryInto<T1> + TryInto<T2> + TryInto<T3>
 {
     let map = COMPONENT_MAP.read().unwrap();
     let mut results = Vec::new();
-    
+
     for (entity_id, components) in map.iter() {
         let mut comp1: Option<T1> = None;
         let mut comp2: Option<T2> = None;
         let mut comp3: Option<T3> = None;
-        
+
         for component in components {
             if comp1.is_none() {
                 if let Ok(typed_component) = component.clone().try_into() {
@@ -189,23 +175,20 @@ where
                 }
             }
         }
-        
+
         if let (Some(c1), Some(c2), Some(c3)) = (comp1, comp2, comp3) {
             results.push((entity_id.clone(), c1, c2, c3));
         }
     }
-    
+
     results
 }
 
 /// Get all entity IDs that have a specific component type
-pub fn query_get_all_ids<T>() -> Vec<EntityId>
-where
-    Component: TryInto<T>,
-{
+pub fn query_get_all_ids<T>() -> Vec<EntityId> where Component: TryInto<T> {
     let map = COMPONENT_MAP.read().unwrap();
     let mut results = Vec::new();
-    
+
     for (entity_id, components) in map.iter() {
         for component in components {
             if component.clone().try_into().is_ok() {
@@ -214,14 +197,14 @@ where
             }
         }
     }
-    
+
     results
 }
 
 /// Copy an entity with all its components to a new entity
 pub fn copy_entity(source_entity_id: &EntityId) -> Option<EntityId> {
     let mut map = COMPONENT_MAP.write().unwrap();
-    
+
     if let Some(source_components) = map.get(source_entity_id).cloned() {
         let new_entity_id = Uuid::new_v4().to_string();
         map.insert(new_entity_id.clone(), source_components);
@@ -316,10 +299,16 @@ impl From<Shape> for Component {
     }
 }
 
+impl From<RigidBody> for Component {
+    fn from(s: RigidBody) -> Self {
+        Component::RigidBody(s)
+    }
+}
+
 // Implement TryInto<T> for Component to extract specific types
 impl TryInto<Transform> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<Transform, Self::Error> {
         match self {
             Component::Transform(t) => Ok(t),
@@ -330,7 +319,7 @@ impl TryInto<Transform> for Component {
 
 impl TryInto<Metadata> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<Metadata, Self::Error> {
         match self {
             Component::Metadata(m) => Ok(m),
@@ -341,7 +330,7 @@ impl TryInto<Metadata> for Component {
 
 impl TryInto<Camera> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<Camera, Self::Error> {
         match self {
             Component::Camera(c) => Ok(c),
@@ -352,7 +341,7 @@ impl TryInto<Camera> for Component {
 
 impl TryInto<Collider> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<Collider, Self::Error> {
         match self {
             Component::Collider(c) => Ok(c),
@@ -363,7 +352,7 @@ impl TryInto<Collider> for Component {
 
 impl TryInto<StaticObject3D> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<StaticObject3D, Self::Error> {
         match self {
             Component::StaticObject3D(s) => Ok(s),
@@ -374,7 +363,7 @@ impl TryInto<StaticObject3D> for Component {
 
 impl TryInto<AnimatedObject3D> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<AnimatedObject3D, Self::Error> {
         match self {
             Component::AnimatedObject3D(a) => Ok(a),
@@ -385,7 +374,7 @@ impl TryInto<AnimatedObject3D> for Component {
 
 impl TryInto<Shape> for Component {
     type Error = ();
-    
+
     fn try_into(self) -> Result<Shape, Self::Error> {
         match self {
             Component::Shape(s) => Ok(s),
@@ -403,64 +392,45 @@ impl World {
     pub fn spawn(&mut self) -> EntityId {
         spawn()
     }
-    
-    pub fn insert<T>(&mut self, entity_id: &EntityId, component: T)
-    where 
-        T: Into<Component> + Clone
-    {
+
+    pub fn insert<T>(&mut self, entity_id: &EntityId, component: T) where T: Into<Component> + Clone {
         insert(entity_id, component);
     }
-    
+
     pub fn get_component_readonly<T>(&self, entity_id: &EntityId) -> Option<T>
-    where
-        T: Clone,
-        Component: TryInto<T>,
+        where T: Clone, Component: TryInto<T>
     {
         get_component(entity_id)
     }
-    
-    pub fn query_get_all<T>(&self) -> Vec<(EntityId, T)>
-    where
-        T: Clone,
-        Component: TryInto<T>,
-    {
+
+    pub fn query_get_all<T>(&self) -> Vec<(EntityId, T)> where T: Clone, Component: TryInto<T> {
         query_all()
     }
-    
+
     pub fn query_get_all2<T1, T2>(&self) -> Vec<(EntityId, T1, T2)>
-    where
-        T1: Clone,
-        T2: Clone,
-        Component: TryInto<T1> + TryInto<T2>,
+        where T1: Clone, T2: Clone, Component: TryInto<T1> + TryInto<T2>
     {
         query_all2()
     }
-    
+
     pub fn query_get_all3<T1, T2, T3>(&self) -> Vec<(EntityId, T1, T2, T3)>
-    where
-        T1: Clone,
-        T2: Clone,
-        T3: Clone,
-        Component: TryInto<T1> + TryInto<T2> + TryInto<T3>,
+        where T1: Clone, T2: Clone, T3: Clone, Component: TryInto<T1> + TryInto<T2> + TryInto<T3>
     {
         query_all3()
     }
-    
-    pub fn query_get_all_ids<T>(&self) -> Vec<EntityId>
-    where
-        Component: TryInto<T>,
-    {
+
+    pub fn query_get_all_ids<T>(&self) -> Vec<EntityId> where Component: TryInto<T> {
         query_get_all_ids::<T>()
     }
-    
+
     pub fn copy_entity(&mut self, source_entity_id: &EntityId) -> Option<EntityId> {
         copy_entity(source_entity_id)
     }
-    
+
     pub fn delete_entity(&mut self, entity_id: &EntityId) -> bool {
         delete_entity(entity_id)
     }
-    
+
     pub fn get_all_entities(&self) -> Vec<(EntityId, usize)> {
         get_all_entities()
     }
