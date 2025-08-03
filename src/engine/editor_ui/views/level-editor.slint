@@ -5,6 +5,7 @@ import { EntityListItem } from "../components/entity-list-item.slint";
 import { ComponentListItem } from "../components/component-list-item.slint";
 import { Button } from "../common/button.slint";
 import { TopBar } from "../components/top-bar.slint";
+import { ComponentData } from "../models/ComponentData.slint";
 
 export component LevelEditorUI inherits Window {
     min-width: 800px;
@@ -48,9 +49,12 @@ export component LevelEditorUI inherits Window {
                     color: Colors.card-background-selected;
                 }
 
-                ComponentListItem {
-                    component-json: InterfaceState.components-json;
+                // Iterate over each component type and create separate editors
+                for component in InterfaceState.parsed-components: ComponentListItem {
+                    title: component.component-type;
+                    fields: InterfaceState.selected-component-fields;
                     entity-id: InterfaceState.selected-index;
+                    component-json: component.data-json;
                 }
             }
         }

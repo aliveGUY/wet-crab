@@ -26,7 +26,6 @@ impl PhysicsSystem {
                             other_transform.clone()
                         )
                 {
-                    println!("Collides");
                 }
             }
         })

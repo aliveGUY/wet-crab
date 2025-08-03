@@ -3,122 +3,12 @@ import { Textfield } from "../common/textfield.slint";
 import { InterfaceState } from "../globals/state.slint";
 import { ComponentData, KeyValuePair } from "../models/ComponentData.slint";
 
-// Individual field editor for a key-value pair
-component FieldEditor {
-    in property <string> field-key;
-    in property <string> field-value;
-    
-    callback value-changed(string /* new_value */);
-    
-    HorizontalLayout {
-        spacing: 8px;
-        alignment: start;
-        
-        // Field name
-        Text {
-            text: field-key + ":";
-            font-size: 11px;
-            color: Colors.text-color;
-            width: 80px;
-            vertical-alignment: center;
-        }
-        
-        // Field value editor
-        Rectangle {
-            height: 24px;
-            border-width: 1px;
-            border-color: Colors.input-border;
-            border-radius: 3px;
-            background: Colors.input-background;
-            
-            TextInput {
-                text: field-value;
-                font-size: 10px;
-                color: Colors.text-color;
-                vertical-alignment: center;
-                
-                edited => {
-                    value-changed(self.text);
-                }
-            }
-        }
-    }
-}
-
-// Individual component editor that shows hardcoded fields based on component type
-component SingleComponentEditor {
-    in property <string> component-json;
-    in property <string> entity-id;
-    in property <string> component-type;
-    in property <string> component-data-json;
-    
-    callback component-changed(string /* updated_component_json */);
-    
-    // Hardcoded fields based on component type (for now)
-    property <[KeyValuePair]> key-value-pairs: [
-        { key: "field1", value: "value1" },
-        { key: "field2", value: "value2" }
-    ];
-    
-    Rectangle {
-        border-radius: 4px;
-        background: Colors.input-background;
-        border-width: 1px;
-        border-color: Colors.input-border;
-        
-        VerticalLayout {
-            padding: 8px;
-            spacing: 6px;
-            
-            // Component type header
-            Text {
-                text: component-type;
-                font-size: 14px;
-                font-weight: 600;
-                color: Colors.text-color;
-            }
-            
-            // Dynamic field editors
-            for pair in key-value-pairs: FieldEditor {
-                field-key: pair.key;
-                field-value: pair.value;
-                
-                value-changed(new-value) => {
-                    debug("Field " + pair.key + " changed to: " + new-value);
-                    
-                    // Create a simple component JSON with the updated field
-                    // This is a simplified approach - in a full implementation we'd reconstruct the full JSON
-                    component-changed("{\"type\": \"" + component-type + "\", \"data\": {\"" + pair.key + "\": \"" + new-value + "\"}}");
-                }
-            }
-            
-            if (key-value-pairs.length == 0): Text {
-                text: "No fields";
-                font-size: 10px;
-                color: #888;
-                horizontal-alignment: center;
-            }
-        }
-    }
-}
-
 export component ComponentListItem {
     in property <string> component-json;
     in property <string> entity-id;
-    
-    // Simple component detection using string matching
-    property <[ComponentData]> parsed-components: [
-        { component_type: "Transform", data_json: "{}" },
-        { component_type: "Metadata", data_json: "{}" }
-    ];
-    
-    // Trigger component update
-    function update-components() {
-        if (entity-id != "" && component-json != "") {
-            InterfaceState.component-changed(entity-id, component-json);
-        }
-    }
-    
+    in property <string> title;
+    in property <[KeyValuePair]> fields;
+
     Rectangle {
         border-radius: 6px;
         background: Colors.card-background;
@@ -128,58 +18,18 @@ export component ComponentListItem {
             spacing: 8px;
             
             Text {
-                text: "Components";
-                font-size: 18px;
+                text: title;
+                font-size: 16px;
                 font-weight: 700;
                 width: 100%;
                 horizontal-alignment: center;
                 color: Colors.text-color;
             }
             
-            if (parsed-components.length == 0): Text {
-                text: "No components";
-                font-size: 12px;
-                color: #888;
-                width: 100%;
-                horizontal-alignment: center;
-            }
-            
-            // Dynamic component rendering
-            for component in parsed-components: SingleComponentEditor {
-                component-json: root.component-json;
-                component-type: component.component_type;
-                component-data-json: component.data_json;
-                entity-id: root.entity-id;
-                
-                component-changed(updated-json) => {
-                    debug("Component " + component.component_type + " changed: " + updated-json);
-                    // Pass the individual component JSON to the callback
-                    InterfaceState.component-changed(root.entity-id, updated-json);
-                }
-            }
-            
-            // Debug section (smaller now)
-            Text {
-                text: "Debug JSON:";
-                font-size: 9px;
-                color: #555;
-            }
-            
-            Rectangle {
-                height: 60px;
-                border-width: 1px;
-                border-color: Colors.input-border;
-                border-radius: 4px;
-                background: Colors.input-background;
-                
-                TextInput {
-                    text: component-json;
-                    font-family: "monospace";
-                    font-size: 8px;
-                    wrap: word-wrap;
-                    color: #555;
-                    read-only: true;
-                }
+            // Component-specific fields editor
+            for pair in fields: Textfield {
+                label: pair.key;
+                value: pair.value;
             }
         }
     }
