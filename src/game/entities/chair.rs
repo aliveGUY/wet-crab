@@ -9,7 +9,7 @@ pub fn spawn_chair() -> EntityId {
         chair_entity_id.clone(),
         get_static_object_copy(Assets::Chair),
         Transform::new(2.0, -3.0, -5.0),
-        Metadata::new("Chair")
+        Metadata::new("Chair", None, None)
     );
     chair_entity_id
 }

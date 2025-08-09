@@ -136,16 +136,16 @@ macro_rules! get_all_components_dyn {
 
 // ——————————————————————————————————————————————————————————— Serialization Macros ————
 
-/// Save the ECS state directly to JSON using serde_json::to_string_pretty
+/// Save the ECS state directly to JSON using filtered serialization (excludes non-persistent entities)
 #[macro_export]
 macro_rules! save_world {
     ($path:expr) => {
         {
             use std::fs;
-            match $crate::index::engine::modules::ecs::serialize_to_json() {
+            match $crate::index::engine::modules::ecs::serialize_to_json_filtered() {
                 Ok(json) => {
                     match fs::write($path, json) {
-                        Ok(()) => println!("💾 Saved world to {}", $path),
+                        Ok(()) => println!("💾 Saved world to {} (excluding non-persistent entities)", $path),
                         Err(e) => eprintln!("❌ Failed to write file {}: {}", $path, e),
                     }
                 }

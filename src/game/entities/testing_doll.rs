@@ -9,7 +9,7 @@ pub fn spawn_testing_doll() -> EntityId {
         doll_entity_id.clone(),
         get_animated_object_copy(Assets::TestingDoll),
         Transform::new(-2.0, -3.0, -5.0),
-        Metadata::new("TestingDoll")
+        Metadata::new("TestingDoll", None, None)
     );
     doll_entity_id
 }

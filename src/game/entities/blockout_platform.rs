@@ -23,7 +23,7 @@ pub fn spawn_blockout_platform() -> EntityId {
         block_entity_id.clone(),
         get_static_object_copy(Assets::BlockoutPlatform),
         Transform::new(player_position[0], player_position[1], player_position[2]),
-        Metadata::new("Blockout Platform"),
+        Metadata::new("Blockout Platform", None, None),
         Collider::new(
             Shape::Box { half_extents: [3.0, 3.0, 3.0] },
             ColliderLayer::Environment,
