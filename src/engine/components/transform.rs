@@ -1,7 +1,7 @@
 use crate::index::engine::utils::math::{
-    mat4x4_from_quat, mat4x4_mul, mat4x4_translate, mat4x4_scale, Mat4x4,
+    mat4x4_mul, mat4x4_translate, mat4x4_scale, Mat4x4,
     mat4x4_extract_translation, mat4x4_extract_scale, mat4x4_extract_euler_angles,
-    mat4x4_rot_x, mat4x4_rot_y, mat4x4_rot_z, mat4x4_identity
+    mat4x4_rot_x, mat4x4_rot_y, mat4x4_rot_z
 };
 use serde::{Serialize, Deserialize};
 

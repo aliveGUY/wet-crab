@@ -320,9 +320,9 @@ impl InterfaceSystem {
         println!("🔄 Deserializing component JSON for entity {}", entity_id);
         
         // Use the generic Component enum deserialization - leverages existing serde type tagging
-        match serde_json::from_str::<crate::index::engine::systems::ecs::Component>(&component_json) {
+        match serde_json::from_str::<crate::index::engine::modules::ecs::Component>(&component_json) {
             Ok(component) => {
-                crate::index::engine::systems::ecs::insert(&entity_id, component);
+                crate::index::engine::modules::ecs::insert(&entity_id, component);
                 println!("✅ Component updated successfully using generic deserialization");
             },
             Err(e) => {

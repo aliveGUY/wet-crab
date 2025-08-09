@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub fn calculate_movement_direction(w: bool, a: bool, s: bool, d: bool) -> String {
     let forward = w && !s;
     let back = s && !w;
@@ -17,6 +18,7 @@ pub fn calculate_movement_direction(w: bool, a: bool, s: bool, d: bool) -> Strin
     }
 }
 
+#[allow(dead_code)]
 pub fn calculate_movement_direction_3d(w: bool, a: bool, s: bool, d: bool, up: bool, down: bool) -> String {
     let forward = w && !s;
     let back = s && !w;

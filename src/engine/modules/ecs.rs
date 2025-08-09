@@ -444,7 +444,7 @@ impl Default for World {
 
 // Legacy WORLD thread-local for compatibility
 thread_local! {
-    pub static WORLD: std::cell::RefCell<World> = std::cell::RefCell::new(World::default());
+    pub static WORLD: std::cell::RefCell<World> = const { std::cell::RefCell::new(World) };
 }
 
 // ——————————————————————————————————————————————————————————— New System Functions ————

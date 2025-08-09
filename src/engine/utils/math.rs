@@ -1,5 +1,6 @@
 pub type Mat4x4 = [f32; 16];
 
+#[allow(dead_code)]
 pub fn mat4x4_identity() -> Mat4x4 {
     [
       1.0, 0.0, 0.0, 0.0, 
@@ -67,6 +68,7 @@ pub fn mat4x4_scale(x: f32, y: f32, z: f32) -> Mat4x4 {
     ]
 }
 
+#[allow(dead_code)]
 pub fn mat4x4_from_quat(quat: [f32; 4]) -> Mat4x4 {
     let [x, y, z, w] = quat;
     let x2 = x * x;
@@ -165,6 +167,7 @@ pub fn build_view_matrix(pos: [f32; 3], pitch: f32, yaw: f32) -> Mat4x4 {
 }
 
 // Calculate world transform for a node in a skeleton hierarchy
+#[allow(dead_code)]
 pub fn node_world_txfm(nodes: &[crate::index::engine::components::AnimatedObject3D::Node], idx: usize) -> Mat4x4 {
     let node = &nodes[idx];
 
@@ -197,6 +200,7 @@ pub fn mat4x4_extract_scale(matrix: &Mat4x4) -> [f32; 3] {
 
 // Extract Euler angles (in radians) from a 4x4 transformation matrix
 // Returns [pitch, yaw, roll] in radians
+#[allow(dead_code)]
 pub fn mat4x4_extract_euler_angles(matrix: &Mat4x4) -> [f32; 3] {
     // First extract scale to normalize the rotation part
     let scale = mat4x4_extract_scale(matrix);
@@ -307,7 +311,7 @@ pub fn segment_segment_distance2(a1: Vec3, a2: Vec3, b1: Vec3, b2: Vec3) -> f32 
     let denom = a * e - b * b;
     
     let mut s = 0.0;
-    let mut t = 0.0;
+    let mut t;
     
     if denom != 0.0 {
         s = ((b * f - c * e) / denom).max(0.0).min(1.0);

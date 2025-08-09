@@ -1,5 +1,5 @@
 use crate::index::engine::components::rigid_body::RigidBody;
-use crate::index::engine::systems::{ spawn, EntityId };
+use crate::index::engine::modules::{ spawn, EntityId };
 use crate::index::engine::components::{
     CameraComponent,
     Metadata,

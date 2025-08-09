@@ -1,7 +1,6 @@
 // Import types and functions from parent scope
 use crate::index::engine::components::{SystemTrait, CameraComponent, Transform};
-use crate::index::engine::systems::event_system::Event;
-use crate::index::engine::utils::math::{mat4x4_translate, mat4x4_mul};
+use crate::index::engine::modules::event_system::Event;
 use crate::index::PLAYER_ENTITY_ID;
 
 #[derive(Debug)]

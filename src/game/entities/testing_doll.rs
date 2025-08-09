@@ -1,7 +1,8 @@
-use crate::index::engine::systems::{spawn, EntityId};
+use crate::index::engine::modules::{spawn, EntityId};
 use crate::index::engine::components::{Transform, Metadata};
 use crate::index::engine::managers::assets_manager::{Assets, get_animated_object_copy};
 
+#[allow(dead_code)]
 pub fn spawn_testing_doll() -> EntityId {
     let doll_entity_id = spawn();
     crate::insert_many!(

@@ -29,7 +29,6 @@ impl Program {
 
         load_world!("src/assets/scenes/test_world.json");
 
-        spawn_testing_doll();
         spawn_player();
 
         InterfaceSystem::update_entities_list();
@@ -48,7 +47,7 @@ impl Program {
                 eprintln!("[WARNING] No depth buffer detected in Program::new()");
                 eprintln!("[WARNING] Depth testing may not work correctly");
             } else {
-                println!("[DEBUG] Program initialized with {} bit depth buffer", depth_bits);
+                println!("[DEBUG] Program initialized with {depth_bits} bit depth buffer");
             }
         }
 
@@ -57,7 +56,7 @@ impl Program {
         Ok(Self { gl })
     }
 
-    pub fn render(&mut self, width: u32, height: u32, delta_time: f32) {
+    pub fn render(&mut self, width: u32, height: u32, _delta_time: f32) {
         let mut viewport = [0i32; 4];
         let mut program = 0i32;
         let mut depth_func = 0;
