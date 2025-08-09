@@ -240,6 +240,27 @@ pub fn serialize_to_json() -> Result<String, serde_json::Error> {
     serde_json::to_string_pretty(&*map)
 }
 
+/// Serialize component map to JSON, excluding entities with is_persist = false
+pub fn serialize_to_json_filtered() -> Result<String, serde_json::Error> {
+    let map = COMPONENT_MAP.read().unwrap();
+    
+    let filtered_map: HashMap<String, Vec<Component>> = map
+        .iter()
+        .filter(|(_, components)| {
+            // Check if entity should be persisted
+            for component in components.iter() {
+                if let Component::Metadata(metadata) = component {
+                    return metadata.is_persist;
+                }
+            }
+            true // Include entities without Metadata (backward compatibility)
+        })
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    
+    serde_json::to_string_pretty(&filtered_map)
+}
+
 /// Deserialize the entire component map from JSON
 pub fn deserialize_from_json(json: &str) -> Result<(), serde_json::Error> {
     let new_map: HashMap<String, Vec<Component>> = serde_json::from_str(json)?;
@@ -444,7 +465,7 @@ impl Default for World {
 
 // Legacy WORLD thread-local for compatibility
 thread_local! {
-    pub static WORLD: std::cell::RefCell<World> = std::cell::RefCell::new(World::default());
+    pub static WORLD: std::cell::RefCell<World> = const { std::cell::RefCell::new(World) };
 }
 
 // ——————————————————————————————————————————————————————————— New System Functions ————

@@ -1,4 +1,4 @@
-use crate::index::engine::systems::{ spawn, EntityId };
+use crate::index::engine::modules::{ spawn, EntityId };
 use crate::index::engine::components::{ Transform, Metadata, Collider, Shape, ColliderLayer };
 use crate::index::engine::managers::assets_manager::{ Assets, get_static_object_copy };
 use crate::index::PLAYER_ENTITY_ID;
@@ -23,7 +23,7 @@ pub fn spawn_blockout_platform() -> EntityId {
         block_entity_id.clone(),
         get_static_object_copy(Assets::BlockoutPlatform),
         Transform::new(player_position[0], player_position[1], player_position[2]),
-        Metadata::new("Blockout Platform"),
+        Metadata::new("Blockout Platform", None, None),
         Collider::new(
             Shape::Box { half_extents: [3.0, 3.0, 3.0] },
             ColliderLayer::Environment,

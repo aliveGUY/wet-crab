@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use winit::keyboard::KeyCode;
 use winit::event::ElementState;
 use slint::winit_030::{ WinitWindowAccessor, winit };
-use crate::index::engine::systems::event_system::{ Event, EventSystem, EventType };
+use crate::index::engine::modules::event_system::{ Event, EventSystem, EventType };
 
 pub struct KeyboardInputSystem {
     pressed_keys: Mutex<HashSet<KeyCode>>,

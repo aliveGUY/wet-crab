@@ -1,0 +1,43 @@
+{
+  "3f3a9b54-2635-4f0e-a026-3af76170f63d": [
+    {
+      "type": "Metadata",
+      "title": "Blockout Platform",
+      "role": null,
+      "is_persist": true
+    },
+    {
+      "type": "StaticObject3D",
+      "asset_type": "BlockoutPlatform"
+    },
+    {
+      "type": "Transform",
+      "position_x": 0.0,
+      "position_y": 0.0,
+      "position_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0,
+      "rotation_x": 0.0,
+      "rotation_y": 0.0,
+      "rotation_z": 0.0
+    },
+    {
+      "type": "Collider",
+      "shape": {
+        "Box": {
+          "half_extents": [
+            3.0,
+            3.0,
+            3.0
+          ]
+        }
+      },
+      "is_hidden": false,
+      "layer": "Environment",
+      "ignored_layers": [
+        "Environment"
+      ]
+    }
+  ]
+}

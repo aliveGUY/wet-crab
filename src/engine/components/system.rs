@@ -1,5 +1,5 @@
 // Import Event type from parent scope
-use crate::index::engine::systems::event_system::Event;
+use crate::index::engine::modules::event_system::Event;
 
 pub trait SystemTrait: Send + Sync {
     fn event(&self, _event: &Event) {

@@ -16,7 +16,7 @@ use std::time::Instant;
 // Import our game engine
 mod index;
 use index::{ Program };
-use index::engine::systems::{ EventSystem, KeyboardInputSystem, InterfaceSystem };
+use index::engine::modules::{ EventSystem, KeyboardInputSystem, InterfaceSystem };
 
 slint::include_modules!();
 
@@ -105,7 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     println!("[UNDERLAY] Game engine initialized successfully");
                                 }
                                 Err(e) => {
-                                    eprintln!("[UNDERLAY] Failed to create game program: {}", e);
+                                    eprintln!("[UNDERLAY] Failed to create game program: {e}");
                                 }
                             }
                         } else {
@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         let mut program_borrow = game_program_for_callback.borrow_mut();
                         if let Some(program) = program_borrow.as_mut() {
-                            program.render(size.width as u32, size.height as u32, elapsed_time);
+                            program.render(size.width, size.height, elapsed_time);
                         }
                     }
 

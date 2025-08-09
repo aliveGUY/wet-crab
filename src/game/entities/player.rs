@@ -1,5 +1,5 @@
 use crate::index::engine::components::rigid_body::RigidBody;
-use crate::index::engine::systems::{ spawn, EntityId };
+use crate::index::engine::modules::{ spawn, EntityId };
 use crate::index::engine::components::{
     CameraComponent,
     Metadata,
@@ -17,7 +17,7 @@ pub fn spawn_player() -> EntityId {
         player_entity_id.clone(),
         CameraComponent::new(),
         Transform::new(0.0, 0.0, 0.0), // Transform component for position
-        Metadata::new_with_role("Player Camera", Some("player")),
+        Metadata::new("Player Camera", Some("player"), Some(false)),
         Collider::new(
             Shape::Cylinder { radius: 1.0, height: 2.0 },
             ColliderLayer::Player,

@@ -18,5 +18,4 @@ pub use ecs::*;
 pub use ecs_macros::spawn;
 
 // Re-export serialization macros
-pub use crate::save_world;
 pub use crate::load_world;

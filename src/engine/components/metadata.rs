@@ -4,17 +4,15 @@ use serde::{Serialize, Deserialize};
 pub struct Metadata {
     pub title: String,
     pub role: Option<String>, // Entity role for global variable binding
+    pub is_persist: bool,     // Whether this entity should be saved to JSON
 }
 
 impl Metadata {
-    pub fn new(title: &str) -> Self {
-        Self::new_with_role(title, None)
-    }
-
-    pub fn new_with_role(title: &str, role: Option<&str>) -> Self {
+    pub fn new(title: &str, role: Option<&str>, is_persist: Option<bool>) -> Self {
         Self {
             title: title.to_string(),
             role: role.map(|r| r.to_string()),
+            is_persist: is_persist.unwrap_or(true), // Default to persistent
         }
     }
 
